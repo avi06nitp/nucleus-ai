@@ -1,0 +1,171 @@
+package com.visa.nucleus.core.service;
+
+import com.visa.nucleus.core.AgentSession;
+import com.visa.nucleus.core.plugin.AgentPlugin;
+import com.visa.nucleus.core.plugin.NotificationLevel;
+import com.visa.nucleus.core.plugin.NotifierPlugin;
+import com.visa.nucleus.core.plugin.RuntimePlugin;
+import com.visa.nucleus.core.plugin.TrackerPlugin;
+import com.visa.nucleus.core.plugin.WorkspacePlugin;
+
+/**
+ * OrchestratorService is the main brain that coordinates all six plugins:
+ * TrackerPlugin, WorkspacePlugin, RuntimePlugin, AgentPlugin, NotifierPlugin,
+ * and ScmPlugin. It manages the full lifecycle of an agent session.
+ */
+public class OrchestratorService {
+
+    private static final int MAX_CI_RETRIES = 3;
+
+    private final SessionManager sessionManager;
+    private final TrackerPlugin trackerPlugin;
+    private final WorkspacePlugin workspacePlugin;
+    private final RuntimePlugin runtimePlugin;
+    private final AgentPlugin agentPlugin;
+    private final NotifierPlugin notifierPlugin;
+    private final String repoPath;
+
+    public OrchestratorService(
+            SessionManager sessionManager,
+            TrackerPlugin trackerPlugin,
+            WorkspacePlugin workspacePlugin,
+            RuntimePlugin runtimePlugin,
+            AgentPlugin agentPlugin,
+            NotifierPlugin notifierPlugin,
+            String repoPath) {
+        this.sessionManager = sessionManager;
+        this.trackerPlugin = trackerPlugin;
+        this.workspacePlugin = workspacePlugin;
+        this.runtimePlugin = runtimePlugin;
+        this.agentPlugin = agentPlugin;
+        this.notifierPlugin = notifierPlugin;
+        this.repoPath = repoPath;
+    }
+
+    /**
+     * Spawns a new agent session for the given project and ticket.
+     *
+     * <ol>
+     *   <li>Creates an AgentSession with PENDING status and saves it to DB.</li>
+     *   <li>Fetches issue context from the tracker (Jira/GitHub).</li>
+     *   <li>Creates a git worktree for isolated development.</li>
+     *   <li>Updates session status to RUNNING.</li>
+     *   <li>Starts the Docker runtime container for this session.</li>
+     *   <li>Initializes the AI agent with the issue context.</li>
+     *   <li>Saves the updated session.</li>
+     * </ol>
+     *
+     * @return the created and running AgentSession
+     */
+    public AgentSession spawn(String projectName, String ticketId) throws Exception {
+        // 1. Create session with PENDING status
+        AgentSession session = new AgentSession(projectName, ticketId);
+        sessionManager.save(session);
+
+        // 2. Fetch issue context from tracker
+        String issueContext = trackerPlugin.getIssueContext(ticketId);
+
+        // 3. Create git worktree
+        String branchName = workspacePlugin.generateBranchName(ticketId, projectName);
+        String worktreePath = workspacePlugin.createWorktree(repoPath, branchName);
+        session.setWorktreePath(worktreePath);
+
+        // 4. Update status to RUNNING
+        session.setStatus(AgentSession.Status.RUNNING);
+
+        // 5. Start Docker container
+        runtimePlugin.start(session);
+
+        // 6. Initialize AI agent with issue context
+        agentPlugin.initialize(session, issueContext);
+
+        // 7. Save updated session
+        sessionManager.save(session);
+
+        return session;
+    }
+
+    /**
+     * Terminates an existing agent session.
+     *
+     * <ol>
+     *   <li>Stops the Docker runtime container.</li>
+     *   <li>Removes the git worktree.</li>
+     *   <li>Updates session status to FAILED and saves.</li>
+     * </ol>
+     */
+    public void terminate(String sessionId) throws Exception {
+        AgentSession session = sessionManager.getSession(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
+
+        // 1. Stop runtime container
+        runtimePlugin.stop(sessionId);
+
+        // 2. Delete worktree if present
+        if (session.getWorktreePath() != null) {
+            workspacePlugin.deleteWorktree(session.getWorktreePath());
+        }
+
+        // 3. Mark session as FAILED and save
+        session.setStatus(AgentSession.Status.FAILED);
+        sessionManager.save(session);
+    }
+
+    /**
+     * Handles a CI failure by forwarding logs to the agent and escalating if retry
+     * count exceeds the threshold.
+     *
+     * <ol>
+     *   <li>Fetches the session from DB.</li>
+     *   <li>Forwards the CI failure logs to the agent.</li>
+     *   <li>Increments the ciRetryCount.</li>
+     *   <li>If retryCount &gt; {@value #MAX_CI_RETRIES}, notifies via notifierPlugin with
+     *       NEEDS_ATTENTION level.</li>
+     *   <li>Saves the updated session.</li>
+     * </ol>
+     */
+    public void handleCiFailure(String sessionId, String ciLogs) throws Exception {
+        AgentSession session = sessionManager.getSession(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
+
+        // 2. Forward CI failure logs to agent
+        agentPlugin.sendMessage(sessionId, "CI failed. Logs: " + ciLogs);
+
+        // 3. Increment retry count
+        session.incrementCiRetryCount();
+
+        // 4. Escalate if too many retries
+        if (session.getCiRetryCount() > MAX_CI_RETRIES) {
+            notifierPlugin.notify(sessionId,
+                    "Session " + sessionId + " has failed CI " + session.getCiRetryCount() + " times and needs attention.",
+                    NotificationLevel.NEEDS_ATTENTION);
+        }
+
+        // 5. Save session
+        sessionManager.save(session);
+    }
+
+    /**
+     * Forwards a reviewer comment to the agent and updates the session status.
+     *
+     * <ol>
+     *   <li>Fetches the session from DB.</li>
+     *   <li>Sends the reviewer comment to the agent.</li>
+     *   <li>Updates the session status to RUNNING (agent is now addressing feedback).</li>
+     *   <li>Saves the session.</li>
+     * </ol>
+     */
+    public void handleReviewComment(String sessionId, String comment) throws Exception {
+        AgentSession session = sessionManager.getSession(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
+
+        // 2. Forward reviewer comment to agent
+        agentPlugin.sendMessage(sessionId, "Reviewer says: " + comment);
+
+        // 3. Update status to RUNNING (agent is addressing feedback)
+        session.setStatus(AgentSession.Status.RUNNING);
+
+        // 4. Save session
+        sessionManager.save(session);
+    }
+}
