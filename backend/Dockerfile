@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk-slim AS build
+FROM eclipse-temurin:21-jdk-slim as build
 WORKDIR /app
 COPY . .
 RUN ./mvnw package -DskipTests
