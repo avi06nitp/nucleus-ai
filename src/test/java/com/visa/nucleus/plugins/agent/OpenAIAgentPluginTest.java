@@ -37,7 +37,7 @@ class OpenAIAgentPluginTest {
         when(httpResponse.body()).thenReturn(buildOpenAIResponse("Ready to start."));
         doReturn(httpResponse).when(httpClient).send(any(HttpRequest.class), any());
 
-        AgentSession session = new AgentSession("PROJ-42-abc");
+        AgentSession session = new AgentSession("proj", "PROJ-42-abc");
         plugin.initialize(session, "Implement feature X");
 
         verify(httpClient, times(1)).send(any(HttpRequest.class), any());
@@ -52,9 +52,9 @@ class OpenAIAgentPluginTest {
                 .thenReturn(buildOpenAIResponse("Done."));
         doReturn(httpResponse).when(httpClient).send(any(HttpRequest.class), any());
 
-        AgentSession session = new AgentSession("PROJ-10-xyz");
+        AgentSession session = new AgentSession("proj", "PROJ-10-xyz");
         plugin.initialize(session, "Fix bug Y");
-        plugin.sendMessage("PROJ-10-xyz", "What is the status?");
+        plugin.sendMessage(session.getSessionId(), "What is the status?");
 
         verify(httpClient, times(2)).send(any(HttpRequest.class), any());
     }
@@ -78,17 +78,17 @@ class OpenAIAgentPluginTest {
 
         doReturn(okResponse).doReturn(errResponse).when(httpClient).send(any(HttpRequest.class), any());
 
-        AgentSession session = new AgentSession("s1");
+        AgentSession session = new AgentSession("proj", "s1");
         plugin.initialize(session, "context");
 
-        assertThrows(RuntimeException.class, () -> plugin.sendMessage("s1", "retry?"));
+        assertThrows(RuntimeException.class, () -> plugin.sendMessage(session.getSessionId(), "retry?"));
     }
 
     @Test
     void initialize_throwsWhenApiKeyMissing() {
         OpenAIAgentPlugin noKey = new OpenAIAgentPlugin(null, OpenAIAgentPlugin.DEFAULT_MODEL, httpClient);
         assertThrows(IllegalStateException.class,
-            () -> noKey.initialize(new AgentSession("s"), "ctx"));
+            () -> noKey.initialize(new AgentSession("proj", "s"), "ctx"));
     }
 
     @Test
