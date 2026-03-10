@@ -76,7 +76,8 @@ class DockerRuntimePluginTest {
 
     @Test
     void start_pullsImageCreatesAndStartsContainer() throws Exception {
-        AgentSession session = new AgentSession("sess-1", "/tmp/worktree");
+        AgentSession session = new AgentSession("sess-1");
+        session.setWorktreePath("/tmp/worktree");
 
         when(dockerClient.pullImageCmd("node:20-slim")).thenReturn(pullImageCmd);
         doAnswer(inv -> { ((ResultCallback.Adapter) inv.getArgument(0)).onComplete(); return inv.getArgument(0); })
@@ -104,7 +105,8 @@ class DockerRuntimePluginTest {
 
     @Test
     void start_setsContainerIdOnSession() throws Exception {
-        AgentSession session = new AgentSession("sess-2", "/tmp/worktree2");
+        AgentSession session = new AgentSession("sess-2");
+        session.setWorktreePath("/tmp/worktree2");
 
         when(dockerClient.pullImageCmd(anyString())).thenReturn(pullImageCmd);
         doAnswer(inv -> { ((ResultCallback.Adapter) inv.getArgument(0)).onComplete(); return inv.getArgument(0); })
