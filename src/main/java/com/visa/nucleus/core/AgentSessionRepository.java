@@ -34,4 +34,10 @@ public class AgentSessionRepository {
     public boolean existsById(String sessionId) {
         return store.containsKey(sessionId);
     }
+
+    public Optional<AgentSession> findByBranchName(String branchName) {
+        return store.values().stream()
+                .filter(s -> branchName.equals(s.getBranchName()))
+                .findFirst();
+    }
 }
