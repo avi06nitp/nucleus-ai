@@ -1,0 +1,20 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/nucleus_ai
+    username: ${DB_USERNAME:nucleus}
+    password: ${DB_PASSWORD:nucleus}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  websocket:
+    message-size-limit: 65536
+    send-buffer-size-limit: 524288
