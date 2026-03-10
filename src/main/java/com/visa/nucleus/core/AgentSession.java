@@ -14,6 +14,7 @@ public class AgentSession {
     private final String ticketId;
     private String branchName;
     private String worktreePath;
+    private String containerId;
     private Status status;
     private int ciRetryCount;
     private final Instant createdAt;
@@ -45,6 +46,7 @@ public class AgentSession {
     public String getTicketId() { return ticketId; }
     public String getBranchName() { return branchName; }
     public String getWorktreePath() { return worktreePath; }
+    public String getContainerId() { return containerId; }
     public Status getStatus() { return status; }
     public int getCiRetryCount() { return ciRetryCount; }
     public Instant getCreatedAt() { return createdAt; }
@@ -57,6 +59,11 @@ public class AgentSession {
 
     public void setWorktreePath(String worktreePath) {
         this.worktreePath = worktreePath;
+        this.updatedAt = Instant.now();
+    }
+
+    public void setContainerId(String containerId) {
+        this.containerId = containerId;
         this.updatedAt = Instant.now();
     }
 
