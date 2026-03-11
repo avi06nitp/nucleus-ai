@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/nucleus_ai
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME:nucleus_ai}
     username: ${DB_USERNAME:nucleus}
     password: ${DB_PASSWORD:nucleus}
     driver-class-name: org.postgresql.Driver

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.AgentSessionRepository;
+import com.visa.nucleus.core.ReactionEvent;
+import com.visa.nucleus.core.ReactionEventRepository;
 import com.visa.nucleus.core.service.OrchestratorService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -46,16 +49,19 @@ public class WebhookController {
 
     private final OrchestratorService orchestratorService;
     private final AgentSessionRepository sessionRepository;
+    private final ReactionEventRepository reactionEventRepository;
     private final ObjectMapper objectMapper;
     private final String webhookSecret;
 
     public WebhookController(
             OrchestratorService orchestratorService,
             AgentSessionRepository sessionRepository,
+            ReactionEventRepository reactionEventRepository,
             ObjectMapper objectMapper,
             @Value("${GITHUB_WEBHOOK_SECRET:}") String webhookSecret) {
         this.orchestratorService = orchestratorService;
         this.sessionRepository = sessionRepository;
+        this.reactionEventRepository = reactionEventRepository;
         this.objectMapper = objectMapper;
         this.webhookSecret = webhookSecret;
     }
@@ -161,7 +167,15 @@ public class WebhookController {
 
         String ciLogs = payload.path("check_run").path("output").path("text").asText("");
         log.info("CI failure detected for branch '" + branchName + "', notifying orchestrator");
-        orchestratorService.handleCiFailure(sessionOpt.get().getSessionId(), ciLogs);
+        String sessionId = sessionOpt.get().getSessionId();
+        orchestratorService.handleCiFailure(sessionId, ciLogs);
+
+        ReactionEvent event = new ReactionEvent();
+        event.setSessionId(sessionId);
+        event.setEventType("CI_FAILURE");
+        event.setPayload(ciLogs);
+        event.setCreatedAt(LocalDateTime.now());
+        reactionEventRepository.save(event);
     }
 
     private void handleReviewComment(JsonNode payload) throws Exception {
@@ -178,7 +192,15 @@ public class WebhookController {
 
         String commentBody = payload.path("comment").path("body").asText("");
         log.info("Review comment received for branch '" + branchName + "', notifying orchestrator");
-        orchestratorService.handleReviewComment(sessionOpt.get().getSessionId(), commentBody);
+        String sessionId = sessionOpt.get().getSessionId();
+        orchestratorService.handleReviewComment(sessionId, commentBody);
+
+        ReactionEvent event = new ReactionEvent();
+        event.setSessionId(sessionId);
+        event.setEventType("REVIEW_COMMENT");
+        event.setPayload(commentBody);
+        event.setCreatedAt(LocalDateTime.now());
+        reactionEventRepository.save(event);
     }
 
     private void handlePullRequest(JsonNode payload) {
