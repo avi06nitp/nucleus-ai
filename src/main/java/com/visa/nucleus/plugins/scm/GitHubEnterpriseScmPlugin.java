@@ -36,10 +36,10 @@ public class GitHubEnterpriseScmPlugin implements ScmPlugin {
     private final RestTemplate restTemplate;
 
     public GitHubEnterpriseScmPlugin(
-            @Value("${nucleus.scm.baseUrl}") String baseUrl,
-            @Value("${nucleus.scm.token}") String token,
-            @Value("${nucleus.scm.owner}") String owner,
-            @Value("${nucleus.scm.repo}") String repo,
+            @Value("${nucleus.scm.baseUrl:https://api.github.com}") String baseUrl,
+            @Value("${nucleus.scm.token:${GITHUB_TOKEN:}}") String token,
+            @Value("${nucleus.scm.owner:owner}") String owner,
+            @Value("${nucleus.scm.repo:repo}") String repo,
             RestTemplate restTemplate) {
         this.baseUrl = baseUrl;
         this.token = token;

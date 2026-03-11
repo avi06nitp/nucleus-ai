@@ -9,6 +9,7 @@ import com.visa.nucleus.plugins.workspace.GitWorktreePlugin;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
 
 /**
  * Registers plugin implementations as Spring beans so they can be injected into
@@ -33,5 +34,10 @@ public class PluginConfig {
     @Bean
     public NotifierPlugin notifierPlugin() {
         return new TeamsNotifierPlugin();
+    }
+
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
     }
 }
