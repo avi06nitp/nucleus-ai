@@ -1,28 +1,39 @@
+version: '3.8'
 services:
   postgres:
-    image: postgres:15
+    image: postgres:16-alpine
     environment:
-      POSTGRES_DB: nucleus
+      POSTGRES_DB: nucleus_ai
       POSTGRES_USER: nucleus
       POSTGRES_PASSWORD: nucleus
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nucleus"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
-    build: ./backend
+    build: .
     ports:
       - "8080:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/nucleus
+      DB_HOST: postgres
+      DB_NAME: nucleus_ai
+      DB_USERNAME: nucleus
+      DB_PASSWORD: nucleus
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
-      TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      - postgres
+      - ${NUCLEUS_REPO_PATH:-/tmp}:/repos
 
   frontend:
     build: ./frontend
