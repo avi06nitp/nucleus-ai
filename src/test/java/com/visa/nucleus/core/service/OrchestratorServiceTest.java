@@ -1,5 +1,6 @@
 package com.visa.nucleus.core.service;
 
+import com.visa.nucleus.config.NucleusProperties;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.AgentSessionRepository;
 import com.visa.nucleus.core.plugin.AgentPlugin;
@@ -34,6 +35,7 @@ class OrchestratorServiceTest {
     @Mock AgentPlugin agentPlugin;
     @Mock NotifierPlugin notifierPlugin;
     @Mock AgentSessionRepository sessionRepository;
+    @Mock NucleusProperties nucleusProperties;
 
     private OrchestratorService orchestrator;
     private SessionManager sessionManager;
@@ -52,7 +54,7 @@ class OrchestratorServiceTest {
         sessionManager = new SessionManager(sessionRepository);
         orchestrator = new OrchestratorService(
                 sessionManager, trackerPlugin, workspacePlugin,
-                runtimePlugin, agentPlugin, notifierPlugin, "/repo");
+                runtimePlugin, agentPlugin, notifierPlugin, nucleusProperties, "/repo");
     }
 
     @Test
