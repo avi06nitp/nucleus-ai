@@ -1,0 +1,570 @@
+#!/usr/bin/env bash
+# nucleus — CLI for the Nucleus AI agent orchestrator
+# Usage: nucleus <command> [args...]
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+NUCLEUS_URL="${NUCLEUS_URL:-http://localhost:8080}"
+CONFIG_DIR="${HOME}/.nucleus"
+CONFIG_FILE="${CONFIG_DIR}/config.yml"
+VERSION="0.1.0"
+
+# ---------------------------------------------------------------------------
+# ANSI Colors
+# ---------------------------------------------------------------------------
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+ORANGE='\033[0;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
+RESET='\033[0m'
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+info()    { echo -e "${CYAN}[nucleus]${RESET} $*"; }
+success() { echo -e "${GREEN}✓${RESET} $*"; }
+warn()    { echo -e "${YELLOW}⚠${RESET}  $*"; }
+error()   { echo -e "${RED}✗${RESET}  $*" >&2; }
+die()     { error "$*"; exit 1; }
+
+# Detect if jq is available
+HAS_JQ=false
+command -v jq &>/dev/null && HAS_JQ=true
+
+# Parse a JSON field using jq or a simple sed fallback
+json_field() {
+    local json="$1" field="$2"
+    if $HAS_JQ; then
+        echo "$json" | jq -r ".$field // empty" 2>/dev/null
+    else
+        echo "$json" | sed -n "s/.*\"${field}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1
+    fi
+}
+
+# Parse a JSON integer field
+json_int() {
+    local json="$1" field="$2"
+    if $HAS_JQ; then
+        echo "$json" | jq -r ".$field // 0" 2>/dev/null
+    else
+        echo "$json" | sed -n "s/.*\"${field}\"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p" | head -1
+    fi
+}
+
+# Colorize a session status string
+colorize_status() {
+    case "$1" in
+        RUNNING)           echo -e "${BLUE}${1}${RESET}" ;;
+        MERGED|COMPLETED)  echo -e "${GREEN}${1}${RESET}" ;;
+        FAILED)            echo -e "${RED}${1}${RESET}" ;;
+        PENDING)           echo -e "${YELLOW}${1}${RESET}" ;;
+        IN_REVIEW|PR_OPEN) echo -e "${ORANGE}${1}${RESET}" ;;
+        *)                 echo "$1" ;;
+    esac
+}
+
+# HTTP helpers (wraps curl with common flags)
+http_get() {
+    local path="$1"
+    curl -fsSL "${NUCLEUS_URL}${path}" \
+        -H "Accept: application/json" \
+        2>/dev/null
+}
+
+http_post() {
+    local path="$1" body="${2:-{}}"
+    curl -fsSL -X POST "${NUCLEUS_URL}${path}" \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json" \
+        -d "$body" \
+        2>/dev/null
+}
+
+http_delete() {
+    local path="$1"
+    curl -fsSL -X DELETE "${NUCLEUS_URL}${path}" \
+        -H "Accept: application/json" \
+        -o /dev/null \
+        -w "%{http_code}" \
+        2>/dev/null
+}
+
+# Check that the backend is reachable
+require_backend() {
+    if ! curl -fsSL "${NUCLEUS_URL}/api/sessions" -o /dev/null 2>/dev/null; then
+        die "Cannot reach backend at ${NUCLEUS_URL}. Is the server running? (hint: nucleus start)"
+    fi
+}
+
+# Read a value from ~/.nucleus/config.yml (YAML key: value)
+config_get() {
+    local key="$1"
+    if [[ -f "$CONFIG_FILE" ]]; then
+        grep -E "^${key}:" "$CONFIG_FILE" 2>/dev/null | sed 's/^[^:]*:[[:space:]]*//' | tr -d '"' | head -1
+    fi
+}
+
+# Write / update a value in ~/.nucleus/config.yml
+config_set() {
+    local key="$1" value="$2"
+    mkdir -p "$CONFIG_DIR"
+    touch "$CONFIG_FILE"
+    if grep -qE "^${key}:" "$CONFIG_FILE" 2>/dev/null; then
+        sed -i.bak "s|^${key}:.*|${key}: \"${value}\"|" "$CONFIG_FILE"
+        rm -f "${CONFIG_FILE}.bak"
+    else
+        echo "${key}: \"${value}\"" >> "$CONFIG_FILE"
+    fi
+}
+
+# Confirm a destructive action
+confirm() {
+    local prompt="${1:-Are you sure?}"
+    echo -n -e "${YELLOW}${prompt} [y/N]${RESET} "
+    read -r answer
+    [[ "$answer" =~ ^[Yy]$ ]]
+}
+
+# ---------------------------------------------------------------------------
+# Auto-detect project properties for nucleus init
+# ---------------------------------------------------------------------------
+detect_language() {
+    if [[ -f "pom.xml" ]]; then echo "java"
+    elif [[ -f "build.gradle" || -f "build.gradle.kts" ]]; then echo "java"
+    elif [[ -f "package.json" ]]; then echo "node"
+    elif [[ -f "requirements.txt" || -f "pyproject.toml" || -f "setup.py" ]]; then echo "python"
+    elif [[ -f "go.mod" ]]; then echo "go"
+    elif [[ -f "Cargo.toml" ]]; then echo "rust"
+    else echo "unknown"
+    fi
+}
+
+detect_package_manager() {
+    if [[ -f "pom.xml" ]]; then echo "maven"
+    elif [[ -f "build.gradle" || -f "build.gradle.kts" ]]; then echo "gradle"
+    elif [[ -f "yarn.lock" ]]; then echo "yarn"
+    elif [[ -f "pnpm-lock.yaml" ]]; then echo "pnpm"
+    elif [[ -f "package-lock.json" ]]; then echo "npm"
+    elif [[ -f "package.json" ]]; then echo "npm"
+    elif [[ -f "Pipfile" ]]; then echo "pipenv"
+    elif [[ -f "poetry.lock" ]]; then echo "poetry"
+    elif [[ -f "requirements.txt" ]]; then echo "pip"
+    else echo "unknown"
+    fi
+}
+
+detect_scm_platform() {
+    local remote
+    remote=$(git remote get-url origin 2>/dev/null || echo "")
+    if [[ "$remote" == *"github"* ]]; then echo "github"
+    elif [[ "$remote" == *"gitlab"* ]]; then echo "gitlab"
+    elif [[ "$remote" == *"bitbucket"* ]]; then echo "bitbucket"
+    else echo "github"
+    fi
+}
+
+detect_default_branch() {
+    git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null \
+        | sed 's|refs/remotes/origin/||' \
+        || git branch -r 2>/dev/null | grep -E "origin/(main|master)" | head -1 | sed 's|.*origin/||' \
+        || echo "main"
+}
+
+generate_config_yaml() {
+    local lang="$1" pm="$2" scm="$3" branch="$4" project_name="$5"
+    cat <<EOF
+# agent-orchestrator.yaml — generated by nucleus init
+project:
+  name: "${project_name}"
+  language: "${lang}"
+  packageManager: "${pm}"
+  defaultBranch: "${branch}"
+
+scm:
+  platform: "${scm}"
+  # token: \${GITHUB_TOKEN}
+
+tracker:
+  platform: "github"
+  # jiraBaseUrl: https://your-org.atlassian.net
+  # jiraEmail: \${JIRA_EMAIL}
+  # jiraToken: \${JIRA_TOKEN}
+
+orchestrator:
+  backendPort: 8080
+  frontendPort: 3000
+  agentType: "claude"
+  maxCiRetries: 3
+
+notifications:
+  # teamsWebhookUrl: \${TEAMS_WEBHOOK_URL}
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+cmd_help() {
+    cat <<EOF
+${BOLD}nucleus${RESET} v${VERSION} — AI agent orchestrator CLI
+
+${BOLD}USAGE${RESET}
+  nucleus <command> [args...]
+
+${BOLD}COMMANDS${RESET}
+  ${CYAN}start [repo-url]${RESET}           Start orchestrator (optionally clone repo first)
+  ${CYAN}init [--auto]${RESET}              Auto-detect project and generate agent-orchestrator.yaml
+  ${CYAN}spawn <project> [issue-id]${RESET} Spawn a new agent session
+  ${CYAN}status${RESET}                     List all sessions in a table
+  ${CYAN}send <id> "<message>"${RESET}      Send a manual instruction to a running agent
+  ${CYAN}logs <id>${RESET}                  Stream runtime logs for a session
+  ${CYAN}dashboard${RESET}                  Open the dashboard in your browser
+  ${CYAN}session ls${RESET}                 Alias for: nucleus status
+  ${CYAN}session kill <id>${RESET}          Terminate a session (with confirmation)
+  ${CYAN}session restore <id>${RESET}       Re-initialize a FAILED session without new worktree
+
+${BOLD}ENVIRONMENT${RESET}
+  NUCLEUS_URL    Backend API URL (default: http://localhost:8080)
+
+${BOLD}CONFIG${RESET}
+  ${HOME}/.nucleus/config.yml
+
+EOF
+}
+
+cmd_start() {
+    local repo_url="${1:-}"
+
+    if [[ -n "$repo_url" ]]; then
+        info "Cloning ${repo_url}…"
+        local repo_name
+        repo_name=$(basename "$repo_url" .git)
+        git clone "$repo_url" "$repo_name" || die "Failed to clone repository"
+        cd "$repo_name"
+        info "Running auto-detection…"
+        cmd_init "--auto"
+    else
+        if [[ ! -f "agent-orchestrator.yaml" ]]; then
+            die "No agent-orchestrator.yaml found in current directory. Run: nucleus init"
+        fi
+    fi
+
+    # Try docker-compose first, fall back to individual starts
+    if [[ -f "docker-compose.yml" ]]; then
+        info "Starting services with docker-compose…"
+        docker-compose up -d
+        success "Backend running on http://localhost:8080"
+        success "Frontend running on http://localhost:3000"
+    elif command -v docker &>/dev/null; then
+        info "Starting backend with Maven…"
+        if [[ -f "mvnw" ]]; then
+            nohup ./mvnw spring-boot:run &>/tmp/nucleus-backend.log &
+            echo $! > /tmp/nucleus-backend.pid
+        else
+            nohup mvn spring-boot:run &>/tmp/nucleus-backend.log &
+            echo $! > /tmp/nucleus-backend.pid
+        fi
+        info "Waiting for backend to start…"
+        local attempts=0
+        until curl -fsSL "${NUCLEUS_URL}/api/sessions" -o /dev/null 2>/dev/null; do
+            sleep 2
+            attempts=$((attempts + 1))
+            [[ $attempts -ge 30 ]] && die "Backend did not start within 60 seconds"
+        done
+        success "Backend running on ${NUCLEUS_URL}"
+
+        if [[ -d "frontend" ]]; then
+            info "Starting frontend…"
+            cd frontend
+            nohup npm run dev &>/tmp/nucleus-frontend.log &
+            echo $! > /tmp/nucleus-frontend.pid
+            cd ..
+            success "Frontend running on http://localhost:3000"
+        fi
+    else
+        die "Docker not found. Please install Docker or run services manually."
+    fi
+
+    info "Orchestrator is ready. Run 'nucleus status' to see sessions."
+}
+
+cmd_init() {
+    local auto=false
+    [[ "${1:-}" == "--auto" ]] && auto=true
+
+    local lang pm scm branch project_name
+
+    if $auto; then
+        info "Auto-detecting project properties…"
+        lang=$(detect_language)
+        pm=$(detect_package_manager)
+        scm=$(detect_scm_platform)
+        branch=$(detect_default_branch)
+        project_name=$(basename "$(pwd)")
+        echo -e "  Language:        ${BOLD}${lang}${RESET}"
+        echo -e "  Package manager: ${BOLD}${pm}${RESET}"
+        echo -e "  SCM platform:    ${BOLD}${scm}${RESET}"
+        echo -e "  Default branch:  ${BOLD}${branch}${RESET}"
+        echo -e "  Project name:    ${BOLD}${project_name}${RESET}"
+    else
+        echo -n "Project name [$(basename "$(pwd)")]: "
+        read -r project_name
+        project_name="${project_name:-$(basename "$(pwd)")}"
+
+        echo -n "Language (java/node/python/go) [$(detect_language)]: "
+        read -r lang
+        lang="${lang:-$(detect_language)}"
+
+        echo -n "Package manager [$(detect_package_manager)]: "
+        read -r pm
+        pm="${pm:-$(detect_package_manager)}"
+
+        echo -n "SCM platform (github/gitlab/bitbucket) [$(detect_scm_platform)]: "
+        read -r scm
+        scm="${scm:-$(detect_scm_platform)}"
+
+        echo -n "Default branch [$(detect_default_branch)]: "
+        read -r branch
+        branch="${branch:-$(detect_default_branch)}"
+
+        # Prompt for credentials if not set
+        if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+            echo -n "GitHub token (leave blank to skip): "
+            read -r -s token
+            echo
+            if [[ -n "$token" ]]; then
+                config_set "github_token" "$token"
+                success "GitHub token saved to ${CONFIG_FILE}"
+            fi
+        fi
+    fi
+
+    generate_config_yaml "$lang" "$pm" "$scm" "$branch" "$project_name" > agent-orchestrator.yaml
+    success "Generated agent-orchestrator.yaml"
+}
+
+cmd_spawn() {
+    local project="${1:-}" issue="${2:-}"
+    [[ -z "$project" ]] && die "Usage: nucleus spawn <project> [issue-id]"
+
+    require_backend
+
+    local body
+    body=$(printf '{"projectName":"%s","ticketId":"%s"}' "$project" "$issue")
+
+    info "Spawning agent session for project=${BOLD}${project}${RESET} issue=${BOLD}${issue:-none}${RESET}…"
+
+    local response
+    response=$(http_post "/api/sessions/spawn" "$body") || die "Failed to spawn session. Is the backend running?"
+
+    local session_id branch_name status
+    session_id=$(json_field "$response" "sessionId")
+    branch_name=$(json_field "$response" "branchName")
+    status=$(json_field "$response" "status")
+
+    if [[ -z "$session_id" ]]; then
+        die "Unexpected response from server:\n${response}"
+    fi
+
+    success "Session spawned!"
+    echo -e "  Session ID: ${BOLD}${session_id}${RESET}"
+    echo -e "  Branch:     ${BOLD}${branch_name:-<pending>}${RESET}"
+    echo -e "  Status:     $(colorize_status "${status:-PENDING}")"
+}
+
+cmd_status() {
+    require_backend
+
+    local response
+    response=$(http_get "/api/sessions") || die "Failed to fetch sessions"
+
+    if [[ -z "$response" || "$response" == "[]" ]]; then
+        info "No active sessions."
+        return 0
+    fi
+
+    # Print header
+    printf "${BOLD}%-36s  %-20s  %-24s  %-12s  %-10s  %s${RESET}\n" \
+        "SESSION ID" "TICKET" "BRANCH" "STATUS" "CI_RETRIES" "PROJECT"
+    printf '%0.s─' {1..110}; echo
+
+    if $HAS_JQ; then
+        echo "$response" | jq -c '.[]' | while IFS= read -r session; do
+            local sid ticket branch status ci_retries project
+            sid=$(json_field "$session" "sessionId")
+            ticket=$(json_field "$session" "ticketId")
+            branch=$(json_field "$session" "branchName")
+            status=$(json_field "$session" "status")
+            ci_retries=$(json_int "$session" "ciRetryCount")
+            project=$(json_field "$session" "projectName")
+
+            # Highlight NEEDS_ATTENTION (ciRetries > 3 or FAILED)
+            local row_color=""
+            [[ "$status" == "FAILED" ]] && row_color="${RED}"
+            [[ "${ci_retries:-0}" -gt 3 ]] && row_color="${ORANGE}"
+
+            printf "${row_color}%-36s  %-20s  %-24s  %-12s  %-10s  %s${RESET}\n" \
+                "${sid:--}" \
+                "${ticket:--}" \
+                "${branch:--}" \
+                "$status" \
+                "${ci_retries:-0}" \
+                "${project:--}"
+        done
+    else
+        # Minimal fallback without jq — print raw JSON
+        warn "Install jq for formatted table output."
+        echo "$response"
+    fi
+}
+
+cmd_send() {
+    local session_id="${1:-}" message="${2:-}"
+    [[ -z "$session_id" ]] && die "Usage: nucleus send <session-id> \"message\""
+    [[ -z "$message" ]]    && die "Usage: nucleus send <session-id> \"message\""
+
+    require_backend
+
+    # Escape double quotes in message
+    local escaped
+    escaped=$(printf '%s' "$message" | sed 's/"/\\"/g')
+    local body
+    body=$(printf '{"message":"%s"}' "$escaped")
+
+    http_post "/api/sessions/${session_id}/message" "$body" > /dev/null \
+        || die "Failed to send message. Session ${session_id} may not exist."
+
+    success "Message sent to session ${session_id}."
+}
+
+cmd_logs() {
+    local session_id="${1:-}"
+    [[ -z "$session_id" ]] && die "Usage: nucleus logs <session-id>"
+
+    require_backend
+
+    info "Fetching logs for session ${session_id}…"
+    local logs
+    logs=$(http_get "/api/sessions/${session_id}/logs") \
+        || die "Session ${session_id} not found or server error."
+
+    if [[ -z "$logs" ]]; then
+        info "No logs available yet."
+    else
+        echo "$logs"
+    fi
+}
+
+cmd_dashboard() {
+    local url="http://localhost:3000"
+    info "Opening dashboard at ${url}…"
+    if command -v open &>/dev/null; then
+        open "$url"
+    elif command -v xdg-open &>/dev/null; then
+        xdg-open "$url"
+    else
+        info "Please open ${BOLD}${url}${RESET} in your browser."
+    fi
+}
+
+cmd_session() {
+    local sub="${1:-}"
+    shift || true
+
+    case "$sub" in
+        ls)      cmd_status ;;
+        kill)    cmd_session_kill "$@" ;;
+        restore) cmd_session_restore "$@" ;;
+        *)
+            die "Unknown session sub-command: ${sub}
+Usage:
+  nucleus session ls
+  nucleus session kill <id>
+  nucleus session restore <id>"
+            ;;
+    esac
+}
+
+cmd_session_kill() {
+    local session_id="${1:-}"
+    [[ -z "$session_id" ]] && die "Usage: nucleus session kill <session-id>"
+
+    require_backend
+
+    # Verify session exists first
+    local session
+    session=$(http_get "/api/sessions/${session_id}") \
+        || die "Session ${session_id} not found."
+
+    local project ticket status
+    project=$(json_field "$session" "projectName")
+    ticket=$(json_field "$session" "ticketId")
+    status=$(json_field "$session" "status")
+
+    echo -e "  Session: ${BOLD}${session_id}${RESET}"
+    echo -e "  Project: ${project:--}"
+    echo -e "  Ticket:  ${ticket:--}"
+    echo -e "  Status:  $(colorize_status "${status:--}")"
+    echo
+
+    confirm "Kill this session?" || { info "Aborted."; exit 0; }
+
+    local code
+    code=$(http_delete "/api/sessions/${session_id}")
+    if [[ "$code" == "204" || "$code" == "200" ]]; then
+        success "Session ${session_id} terminated."
+    else
+        die "Failed to terminate session (HTTP ${code})."
+    fi
+}
+
+cmd_session_restore() {
+    local session_id="${1:-}"
+    [[ -z "$session_id" ]] && die "Usage: nucleus session restore <session-id>"
+
+    require_backend
+
+    info "Restoring session ${session_id}…"
+
+    local response
+    response=$(http_post "/api/sessions/${session_id}/restore") \
+        || die "Failed to restore session ${session_id}. Session may not exist or is not in FAILED state."
+
+    local status
+    status=$(json_field "$response" "status")
+
+    success "Session ${session_id} restored!"
+    echo -e "  Status: $(colorize_status "${status:-RUNNING}")"
+}
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+main() {
+    local cmd="${1:-help}"
+    shift || true
+
+    case "$cmd" in
+        start)           cmd_start "$@" ;;
+        init)            cmd_init "$@" ;;
+        spawn)           cmd_spawn "$@" ;;
+        status)          cmd_status ;;
+        send)            cmd_send "$@" ;;
+        logs)            cmd_logs "$@" ;;
+        dashboard)       cmd_dashboard ;;
+        session)         cmd_session "$@" ;;
+        help|--help|-h)  cmd_help ;;
+        version|--version|-v) echo "nucleus v${VERSION}" ;;
+        *)               die "Unknown command: ${cmd}. Run 'nucleus help' for usage." ;;
+    esac
+}
+
+main "$@"
