@@ -10,6 +10,8 @@ public class ProjectConfig {
     private String defaultBranch = "main";
     private String jiraProjectKey;
     private String sessionPrefix;
+    private String agentType;   // "claude" or "openai"
+    private String runtime;     // "docker" or "tmux"
 
     public String getRepo() {
         return repo;
@@ -49,5 +51,21 @@ public class ProjectConfig {
 
     public void setSessionPrefix(String sessionPrefix) {
         this.sessionPrefix = sessionPrefix;
+    }
+
+    public String getAgentType() {
+        return agentType;
+    }
+
+    public void setAgentType(String agentType) {
+        this.agentType = agentType;
+    }
+
+    public String getRuntime() {
+        return runtime;
+    }
+
+    public void setRuntime(String runtime) {
+        this.runtime = runtime;
     }
 }
