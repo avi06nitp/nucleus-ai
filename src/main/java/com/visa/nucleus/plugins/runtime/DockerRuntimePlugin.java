@@ -128,6 +128,41 @@ public class DockerRuntimePlugin implements RuntimePlugin {
     }
 
     /**
+     * Runs a shell command in the session's container and returns the combined stdout+stderr output.
+     */
+    public String execAndCapture(String sessionId, String command) throws Exception {
+        String containerName = CONTAINER_PREFIX + sessionId;
+        List<Container> containers = dockerClient.listContainersCmd()
+                .withNameFilter(Collections.singletonList(containerName))
+                .exec();
+
+        if (containers.isEmpty()) {
+            throw new RuntimeException("No running container for session " + sessionId);
+        }
+
+        String containerId = containers.get(0).getId();
+        ExecCreateCmdResponse exec = dockerClient.execCreateCmd(containerId)
+                .withAttachStdout(true)
+                .withAttachStderr(true)
+                .withCmd("sh", "-c", command)
+                .exec();
+
+        StringBuilder output = new StringBuilder();
+        dockerClient.execStartCmd(exec.getId())
+                .exec(new ResultCallback.Adapter<Frame>() {
+                    @Override
+                    public void onNext(Frame frame) {
+                        if (frame.getPayload() != null) {
+                            output.append(new String(frame.getPayload()));
+                        }
+                    }
+                })
+                .awaitCompletion();
+
+        return output.toString();
+    }
+
+    /**
      * Returns the last 200 lines of stdout+stderr from the container.
      */
     @Override
