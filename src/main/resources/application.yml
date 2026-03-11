@@ -18,3 +18,7 @@ spring:
   websocket:
     message-size-limit: 65536
     send-buffer-size-limit: 524288
+
+nucleus:
+  config:
+    file: ${NUCLEUS_CONFIG_FILE:agent-orchestrator.yaml}
