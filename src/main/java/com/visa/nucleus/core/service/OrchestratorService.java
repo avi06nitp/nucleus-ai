@@ -13,6 +13,8 @@ import com.visa.nucleus.core.plugin.WorkspacePlugin;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.File;
+
 /**
  * OrchestratorService is the main brain that coordinates all six plugins:
  * TrackerPlugin, WorkspacePlugin, RuntimePlugin, AgentPlugin, NotifierPlugin,
@@ -98,6 +100,7 @@ public class OrchestratorService {
         // 3. Create git worktree
         String branchName = workspacePlugin.generateBranchName(ticketId, projectName);
         String worktreePath = workspacePlugin.createWorktree(repoPath, branchName);
+        session.setBranchName(branchName);
         session.setWorktreePath(worktreePath);
 
         // 4. Update status to RUNNING
@@ -139,6 +142,47 @@ public class OrchestratorService {
         // 3. Mark session as FAILED and save
         session.setStatus(AgentSession.Status.FAILED);
         sessionManager.save(session);
+    }
+
+    /**
+     * Restores a FAILED (or RUNNING) agent session without losing its git branch.
+     *
+     * <ol>
+     *   <li>Fetches the session — must exist and be in FAILED or RUNNING state.</li>
+     *   <li>Recreates the git worktree from the existing branch if the directory is gone.</li>
+     *   <li>Restarts the Docker runtime container.</li>
+     *   <li>Re-fetches issue context from the tracker and re-initializes the agent.</li>
+     *   <li>Sets status back to RUNNING and saves.</li>
+     * </ol>
+     *
+     * @return the restored AgentSession in RUNNING state
+     */
+    public AgentSession restore(String sessionId) throws Exception {
+        AgentSession session = sessionManager.getSession(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
+
+        if (session.getStatus() != AgentSession.Status.FAILED
+                && session.getStatus() != AgentSession.Status.RUNNING) {
+            throw new IllegalStateException(
+                    "Session " + sessionId + " cannot be restored from status: " + session.getStatus());
+        }
+
+        // Recreate worktree if missing
+        if (session.getWorktreePath() == null || !new File(session.getWorktreePath()).exists()) {
+            String path = workspacePlugin.restoreWorktree(repoPath, session.getBranchName());
+            session.setWorktreePath(path);
+        }
+
+        // Restart runtime
+        runtimePlugin.start(session);
+
+        // Re-fetch issue context and re-initialize agent
+        String issueContext = trackerPlugin.getIssueContext(session.getTicketId());
+        agentPlugin.initialize(session, issueContext);
+
+        session.setStatus(AgentSession.Status.RUNNING);
+        sessionManager.save(session);
+        return session;
     }
 
     /**

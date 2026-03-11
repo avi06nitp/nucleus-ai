@@ -1,4 +1,4 @@
-export type SessionStatus = 'PENDING' | 'RUNNING' | 'PR_OPEN' | 'IN_REVIEW' | 'MERGED';
+export type SessionStatus = 'PENDING' | 'RUNNING' | 'PR_OPEN' | 'IN_REVIEW' | 'MERGED' | 'FAILED';
 
 export type AgentType = 'claude' | 'openai';
 

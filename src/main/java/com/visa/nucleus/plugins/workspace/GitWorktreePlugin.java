@@ -36,6 +36,21 @@ public class GitWorktreePlugin implements WorkspacePlugin {
     }
 
     @Override
+    public String restoreWorktree(String repoPath, String branchName) throws Exception {
+        File worktreeBase = new File(WORKTREE_BASE);
+        if (!worktreeBase.exists()) {
+            worktreeBase.mkdirs();
+        }
+
+        String worktreePath = WORKTREE_BASE + branchName;
+        processRunner.run(
+            List.of("git", "worktree", "add", worktreePath, branchName),
+            repoPath
+        );
+        return worktreePath;
+    }
+
+    @Override
     public void deleteWorktree(String worktreePath) throws Exception {
         // Use the parent repo path — git worktree remove can be run from any git dir.
         // We derive the repo by walking up from the worktree path, but since the

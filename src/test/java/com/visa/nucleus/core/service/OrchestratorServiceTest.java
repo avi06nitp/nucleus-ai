@@ -169,4 +169,47 @@ class OrchestratorServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> orchestrator.handleReviewComment("unknown-id", "comment"));
     }
+
+    // ------------------------------------------------------------------
+    // restore
+    // ------------------------------------------------------------------
+
+    @Test
+    void restore_recreates_worktree_and_restarts_agent() throws Exception {
+        // Build a FAILED session directly (no spawn) so mock interaction counts are clean
+        AgentSession session = new AgentSession("proj", "T-10");
+        session.setStatus(AgentSession.Status.FAILED);
+        session.setBranchName("feat/branch");
+        session.setWorktreePath(null); // worktree is gone
+        sessionManager.save(session);
+
+        when(trackerPlugin.getIssueContext("T-10")).thenReturn("fresh context");
+        when(workspacePlugin.restoreWorktree("/repo", "feat/branch")).thenReturn("/tmp/wt/feat/branch");
+
+        AgentSession restored = orchestrator.restore(session.getSessionId());
+
+        assertEquals(AgentSession.Status.RUNNING, restored.getStatus());
+        assertEquals("feat/branch", restored.getBranchName());
+        verify(workspacePlugin).restoreWorktree("/repo", "feat/branch");
+        verify(runtimePlugin).start(restored);
+        verify(agentPlugin).initialize(restored, "fresh context");
+    }
+
+    @Test
+    void restore_throws_for_unknown_session() {
+        assertThrows(IllegalArgumentException.class, () -> orchestrator.restore("no-such-id"));
+    }
+
+    @Test
+    void restore_throws_for_session_in_non_restoreable_state() throws Exception {
+        when(trackerPlugin.getIssueContext(anyString())).thenReturn("ctx");
+        when(workspacePlugin.generateBranchName(anyString(), anyString())).thenReturn("feat/branch");
+        when(workspacePlugin.createWorktree(anyString(), anyString())).thenReturn("/tmp/wt");
+
+        AgentSession session = orchestrator.spawn("proj", "T-12");
+        session.setStatus(AgentSession.Status.MERGED);
+        sessionManager.save(session);
+
+        assertThrows(IllegalStateException.class, () -> orchestrator.restore(session.getSessionId()));
+    }
 }

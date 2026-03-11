@@ -185,4 +185,32 @@ class SessionControllerTest {
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         verifyNoInteractions(runtimePlugin);
     }
+
+    // ------------------------------------------------------------------
+    // POST /api/sessions/{id}/restore
+    // ------------------------------------------------------------------
+
+    @Test
+    void restoreSession_returnsRestoredSessionAndBroadcasts() throws Exception {
+        AgentSession session = new AgentSession("proj", "PROJ-99");
+        session.setStatus(AgentSession.Status.RUNNING);
+        when(orchestratorService.restore(session.getSessionId())).thenReturn(session);
+
+        ResponseEntity<AgentSession> response = controller.restoreSession(session.getSessionId());
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(session.getSessionId(), response.getBody().getSessionId());
+
+        verify(orchestratorService).restore(session.getSessionId());
+        verify(messagingTemplate).convertAndSend(eq("/topic/sessions"), eq(session));
+    }
+
+    @Test
+    void restoreSession_propagatesExceptionFromOrchestrator() throws Exception {
+        when(orchestratorService.restore("bad-id"))
+                .thenThrow(new IllegalArgumentException("Session not found: bad-id"));
+
+        assertThrows(IllegalArgumentException.class, () -> controller.restoreSession("bad-id"));
+    }
 }
