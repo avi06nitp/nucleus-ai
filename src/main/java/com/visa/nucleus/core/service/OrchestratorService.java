@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
+import java.util.List;
 
 /**
  * OrchestratorService is the main brain that coordinates all six plugins:
@@ -31,7 +32,7 @@ public class OrchestratorService {
     private final WorkspacePlugin workspacePlugin;
     private final RuntimePlugin runtimePlugin;
     private final AgentPlugin agentPlugin;
-    private final NotifierPlugin notifierPlugin;
+    private final List<NotifierPlugin> notifierPlugins;
     private final NucleusProperties nucleusProperties;
     private final String repoPath;
 
@@ -41,7 +42,7 @@ public class OrchestratorService {
             WorkspacePlugin workspacePlugin,
             RuntimePlugin runtimePlugin,
             AgentPlugin agentPlugin,
-            NotifierPlugin notifierPlugin,
+            List<NotifierPlugin> notifierPlugins,
             NucleusProperties nucleusProperties,
             @Value("${NUCLEUS_REPO_PATH:/tmp}") String repoPath) {
         this.sessionManager = sessionManager;
@@ -49,7 +50,7 @@ public class OrchestratorService {
         this.workspacePlugin = workspacePlugin;
         this.runtimePlugin = runtimePlugin;
         this.agentPlugin = agentPlugin;
-        this.notifierPlugin = notifierPlugin;
+        this.notifierPlugins = notifierPlugins;
         this.nucleusProperties = nucleusProperties;
         this.repoPath = repoPath;
     }
@@ -210,7 +211,7 @@ public class OrchestratorService {
 
         // 4. Escalate if too many retries (limit comes from reactions.ci-failed.retries)
         if (session.getCiRetryCount() > maxCiRetries(session.getProjectName())) {
-            notifierPlugin.notify(sessionId,
+            notifyAll(sessionId,
                     "Session " + sessionId + " has failed CI " + session.getCiRetryCount() + " times and needs attention.",
                     NotificationLevel.NEEDS_ATTENTION);
         }
@@ -241,5 +242,11 @@ public class OrchestratorService {
 
         // 4. Save session
         sessionManager.save(session);
+    }
+
+    private void notifyAll(String sessionId, String message, NotificationLevel level) throws Exception {
+        for (NotifierPlugin notifier : notifierPlugins) {
+            notifier.notify(sessionId, message, level);
+        }
     }
 }

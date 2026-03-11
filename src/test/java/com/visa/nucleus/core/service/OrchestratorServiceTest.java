@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -54,7 +56,7 @@ class OrchestratorServiceTest {
         sessionManager = new SessionManager(sessionRepository);
         orchestrator = new OrchestratorService(
                 sessionManager, trackerPlugin, workspacePlugin,
-                runtimePlugin, agentPlugin, notifierPlugin, nucleusProperties, "/repo");
+                runtimePlugin, agentPlugin, List.of(notifierPlugin), nucleusProperties, "/repo");
     }
 
     @Test
