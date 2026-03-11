@@ -1,5 +1,6 @@
 package com.visa.nucleus.core.service;
 
+import com.visa.nucleus.config.NucleusProperties;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.AgentSessionRepository;
 import com.visa.nucleus.core.plugin.AgentPlugin;
@@ -13,12 +14,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class OrchestratorServiceTest {
 
     @Mock TrackerPlugin trackerPlugin;
@@ -26,16 +34,27 @@ class OrchestratorServiceTest {
     @Mock RuntimePlugin runtimePlugin;
     @Mock AgentPlugin agentPlugin;
     @Mock NotifierPlugin notifierPlugin;
+    @Mock AgentSessionRepository sessionRepository;
+    @Mock NucleusProperties nucleusProperties;
 
     private OrchestratorService orchestrator;
     private SessionManager sessionManager;
 
     @BeforeEach
     void setUp() {
-        sessionManager = new SessionManager(new AgentSessionRepository());
+        Map<String, AgentSession> store = new HashMap<>();
+        when(sessionRepository.save(any(AgentSession.class))).thenAnswer(inv -> {
+            AgentSession s = inv.getArgument(0);
+            store.put(s.getSessionId(), s);
+            return s;
+        });
+        when(sessionRepository.findById(anyString())).thenAnswer(inv ->
+                Optional.ofNullable(store.get((String) inv.getArgument(0))));
+
+        sessionManager = new SessionManager(sessionRepository);
         orchestrator = new OrchestratorService(
                 sessionManager, trackerPlugin, workspacePlugin,
-                runtimePlugin, agentPlugin, notifierPlugin, "/repo");
+                runtimePlugin, agentPlugin, notifierPlugin, nucleusProperties, "/repo");
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.visa.nucleus.webhook;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.AgentSessionRepository;
+import com.visa.nucleus.core.ReactionEventRepository;
 import com.visa.nucleus.core.service.OrchestratorService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,12 +35,15 @@ class WebhookControllerTest {
     @Mock
     private AgentSessionRepository sessionRepository;
 
+    @Mock
+    private ReactionEventRepository reactionEventRepository;
+
     private WebhookController controller;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
-        controller = new WebhookController(orchestratorService, sessionRepository, objectMapper, SECRET);
+        controller = new WebhookController(orchestratorService, sessionRepository, reactionEventRepository, objectMapper, SECRET);
     }
 
     // -------------------------------------------------------------------------
@@ -70,7 +74,7 @@ class WebhookControllerTest {
     @Test
     void verifySignature_skipsCheckWhenSecretNotConfigured() {
         WebhookController noSecretController =
-                new WebhookController(orchestratorService, sessionRepository, objectMapper, "");
+                new WebhookController(orchestratorService, sessionRepository, reactionEventRepository, objectMapper, "");
         byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
         assertTrue(noSecretController.verifySignature(body, ""));
     }

@@ -10,6 +10,8 @@ import com.visa.nucleus.core.plugin.NotifierPlugin;
 import com.visa.nucleus.core.plugin.RuntimePlugin;
 import com.visa.nucleus.core.plugin.TrackerPlugin;
 import com.visa.nucleus.core.plugin.WorkspacePlugin;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
 
 /**
  * OrchestratorService is the main brain that coordinates all six plugins:
@@ -19,6 +21,7 @@ import com.visa.nucleus.core.plugin.WorkspacePlugin;
  * <p>Plugin selection and reaction behaviour is driven by {@link NucleusProperties}
  * loaded from {@code agent-orchestrator.yaml}.
  */
+@Service
 public class OrchestratorService {
 
     private final SessionManager sessionManager;
@@ -38,7 +41,7 @@ public class OrchestratorService {
             AgentPlugin agentPlugin,
             NotifierPlugin notifierPlugin,
             NucleusProperties nucleusProperties,
-            String repoPath) {
+            @Value("${NUCLEUS_REPO_PATH:/tmp}") String repoPath) {
         this.sessionManager = sessionManager;
         this.trackerPlugin = trackerPlugin;
         this.workspacePlugin = workspacePlugin;
