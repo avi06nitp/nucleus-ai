@@ -341,4 +341,49 @@ class DockerRuntimePluginTest {
 
         assertFalse(plugin.isRunning("sess-1"));
     }
+
+    // -----------------------------------------------------------------------
+    // execAndCapture()
+    // -----------------------------------------------------------------------
+
+    @Test
+    void execAndCapture_executesCommandAndReturnsOutput() throws Exception {
+        Container container = mock(Container.class);
+        when(container.getId()).thenReturn("container-abc");
+
+        when(dockerClient.listContainersCmd()).thenReturn(listContainersCmd);
+        when(listContainersCmd.withNameFilter(any())).thenReturn(listContainersCmd);
+        when(listContainersCmd.exec()).thenReturn(List.of(container));
+
+        when(dockerClient.execCreateCmd("container-abc")).thenReturn(execCreateCmd);
+        when(execCreateCmd.withAttachStdout(anyBoolean())).thenReturn(execCreateCmd);
+        when(execCreateCmd.withAttachStderr(anyBoolean())).thenReturn(execCreateCmd);
+        when(execCreateCmd.withCmd(any(String[].class))).thenReturn(execCreateCmd);
+        when(execCreateCmd.exec()).thenReturn(execCreateCmdResponse);
+        when(execCreateCmdResponse.getId()).thenReturn("exec-capture-1");
+
+        when(dockerClient.execStartCmd("exec-capture-1")).thenReturn(execStartCmd);
+        doAnswer(inv -> {
+            ResultCallback.Adapter cb = inv.getArgument(0);
+            cb.onComplete();
+            return cb;
+        }).when(execStartCmd).exec(any());
+
+        String result = plugin.execAndCapture("sess-1", "git status");
+
+        verify(execCreateCmd).withAttachStdout(true);
+        verify(execCreateCmd).withAttachStderr(true);
+        verify(execCreateCmd).withCmd(eq("sh"), eq("-c"), eq("git status"));
+        assertNotNull(result);
+    }
+
+    @Test
+    void execAndCapture_throwsWhenContainerNotFound() {
+        when(dockerClient.listContainersCmd()).thenReturn(listContainersCmd);
+        when(listContainersCmd.withNameFilter(any())).thenReturn(listContainersCmd);
+        when(listContainersCmd.exec()).thenReturn(Collections.emptyList());
+
+        assertThrows(RuntimeException.class,
+            () -> plugin.execAndCapture("missing-sess", "echo hello"));
+    }
 }
