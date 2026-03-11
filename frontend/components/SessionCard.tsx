@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ExternalLink, MessageSquare, FileText } from 'lucide-react';
+import { ExternalLink, MessageSquare, FileText, RefreshCw } from 'lucide-react';
 import { Session } from '../types/session';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -10,6 +10,7 @@ const STATUS_COLORS: Record<string, string> = {
   PR_OPEN: 'bg-purple-400',
   IN_REVIEW: 'bg-orange-400',
   MERGED: 'bg-green-400',
+  FAILED: 'bg-red-400',
 };
 
 const AGENT_BADGE_COLORS: Record<string, string> = {
@@ -45,7 +46,19 @@ interface Props {
 export default function SessionCard({ session, onViewLogs }: Props) {
   const [showMessageInput, setShowMessageInput] = useState(false);
   const [message, setMessage] = useState('');
+  const [restoring, setRestoring] = useState(false);
   const elapsed = useElapsed(session.spawnedAt);
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      await fetch(`/api/sessions/${session.id}/restore`, { method: 'POST' });
+    } catch (err) {
+      console.error('Failed to restore session', err);
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!message.trim()) return;
@@ -116,14 +129,25 @@ export default function SessionCard({ session, onViewLogs }: Props) {
         </div>
       )}
 
-      <div className="flex gap-2 mt-1">
-        <button
-          onClick={() => setShowMessageInput((v) => !v)}
-          className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
-        >
-          <MessageSquare size={12} />
-          Send Message
-        </button>
+      <div className="flex gap-2 mt-1 flex-wrap">
+        {session.status === 'FAILED' ? (
+          <button
+            onClick={handleRestore}
+            disabled={restoring}
+            className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={restoring ? 'animate-spin' : ''} />
+            {restoring ? 'Restoring…' : 'Restore'}
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowMessageInput((v) => !v)}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            <MessageSquare size={12} />
+            Send Message
+          </button>
+        )}
         <button
           onClick={() => onViewLogs(session)}
           className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"

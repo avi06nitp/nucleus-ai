@@ -14,6 +14,7 @@ const COLUMNS: { status: SessionStatus; label: string }[] = [
   { status: 'PR_OPEN', label: 'PR OPEN' },
   { status: 'IN_REVIEW', label: 'IN REVIEW' },
   { status: 'MERGED', label: 'MERGED' },
+  { status: 'FAILED', label: 'FAILED' },
 ];
 
 const COLUMN_ACCENT: Record<SessionStatus, string> = {
@@ -22,6 +23,7 @@ const COLUMN_ACCENT: Record<SessionStatus, string> = {
   PR_OPEN: 'border-purple-500',
   IN_REVIEW: 'border-orange-500',
   MERGED: 'border-green-500',
+  FAILED: 'border-red-500',
 };
 
 export default function Dashboard() {

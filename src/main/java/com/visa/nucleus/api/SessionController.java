@@ -82,6 +82,18 @@ public class SessionController {
     }
 
     /**
+     * POST /api/sessions/{id}/restore
+     * Restores a FAILED session: recreates the worktree if missing, restarts the
+     * runtime, and re-initializes the agent with fresh issue context.
+     */
+    @PostMapping("/{id}/restore")
+    public ResponseEntity<AgentSession> restoreSession(@PathVariable String id) throws Exception {
+        AgentSession session = orchestratorService.restore(id);
+        broadcast(session);
+        return ResponseEntity.ok(session);
+    }
+
+    /**
      * POST /api/sessions/{id}/message
      * Body: { message }
      * Lets engineers manually send instructions to a running agent.
