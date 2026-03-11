@@ -1,5 +1,8 @@
 package com.visa.nucleus.core.service;
 
+import com.visa.nucleus.config.NucleusProperties;
+import com.visa.nucleus.config.ProjectConfig;
+import com.visa.nucleus.config.ReactionRule;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.plugin.AgentPlugin;
 import com.visa.nucleus.core.plugin.NotificationLevel;
@@ -12,10 +15,11 @@ import com.visa.nucleus.core.plugin.WorkspacePlugin;
  * OrchestratorService is the main brain that coordinates all six plugins:
  * TrackerPlugin, WorkspacePlugin, RuntimePlugin, AgentPlugin, NotifierPlugin,
  * and ScmPlugin. It manages the full lifecycle of an agent session.
+ *
+ * <p>Plugin selection and reaction behaviour is driven by {@link NucleusProperties}
+ * loaded from {@code agent-orchestrator.yaml}.
  */
 public class OrchestratorService {
-
-    private static final int MAX_CI_RETRIES = 3;
 
     private final SessionManager sessionManager;
     private final TrackerPlugin trackerPlugin;
@@ -23,6 +27,7 @@ public class OrchestratorService {
     private final RuntimePlugin runtimePlugin;
     private final AgentPlugin agentPlugin;
     private final NotifierPlugin notifierPlugin;
+    private final NucleusProperties nucleusProperties;
     private final String repoPath;
 
     public OrchestratorService(
@@ -32,6 +37,7 @@ public class OrchestratorService {
             RuntimePlugin runtimePlugin,
             AgentPlugin agentPlugin,
             NotifierPlugin notifierPlugin,
+            NucleusProperties nucleusProperties,
             String repoPath) {
         this.sessionManager = sessionManager;
         this.trackerPlugin = trackerPlugin;
@@ -39,7 +45,28 @@ public class OrchestratorService {
         this.runtimePlugin = runtimePlugin;
         this.agentPlugin = agentPlugin;
         this.notifierPlugin = notifierPlugin;
+        this.nucleusProperties = nucleusProperties;
         this.repoPath = repoPath;
+    }
+
+    /**
+     * Returns the effective {@link ProjectConfig} for the given project name,
+     * or {@code null} if the project is not explicitly configured.
+     */
+    public ProjectConfig getProjectConfig(String projectName) {
+        return nucleusProperties.getProjects().get(projectName);
+    }
+
+    /**
+     * Returns the effective max CI retries for a given project, falling back to
+     * the reaction rule configured under {@code ci-failed}, then to 3.
+     */
+    private int maxCiRetries(String projectName) {
+        ReactionRule rule = nucleusProperties.getReactions().get("ci-failed");
+        if (rule != null && rule.getRetries() > 0) {
+            return rule.getRetries();
+        }
+        return 3;
     }
 
     /**
@@ -119,7 +146,7 @@ public class OrchestratorService {
      *   <li>Fetches the session from DB.</li>
      *   <li>Forwards the CI failure logs to the agent.</li>
      *   <li>Increments the ciRetryCount.</li>
-     *   <li>If retryCount &gt; {@value #MAX_CI_RETRIES}, notifies via notifierPlugin with
+     *   <li>If retryCount exceeds the configured {@code reactions.ci-failed.retries} limit, notifies via notifierPlugin with
      *       NEEDS_ATTENTION level.</li>
      *   <li>Saves the updated session.</li>
      * </ol>
@@ -134,8 +161,8 @@ public class OrchestratorService {
         // 3. Increment retry count
         session.incrementCiRetryCount();
 
-        // 4. Escalate if too many retries
-        if (session.getCiRetryCount() > MAX_CI_RETRIES) {
+        // 4. Escalate if too many retries (limit comes from reactions.ci-failed.retries)
+        if (session.getCiRetryCount() > maxCiRetries(session.getProjectName())) {
             notifierPlugin.notify(sessionId,
                     "Session " + sessionId + " has failed CI " + session.getCiRetryCount() + " times and needs attention.",
                     NotificationLevel.NEEDS_ATTENTION);

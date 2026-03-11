@@ -1,0 +1,32 @@
+# Nucleus AI — Agent Orchestrator Configuration
+# This file is the single source of truth for projects, plugins, and reaction rules.
+# Place it in the working directory or set NUCLEUS_CONFIG env var to its path.
+
+port: 3000
+
+defaults:
+  runtime: docker          # docker | tmux
+  agent: claude            # claude | openai
+  workspace: worktree      # worktree | clone
+  notifiers: [teams]       # teams | slack | desktop | webhook
+
+projects:
+  my-app:
+    repo: owner/my-app
+    path: ~/my-app
+    defaultBranch: main
+    jiraProjectKey: MYAPP
+    sessionPrefix: app
+
+reactions:
+  ci-failed:
+    auto: true
+    action: send-to-agent
+    retries: 3
+  changes-requested:
+    auto: true
+    action: send-to-agent
+    escalateAfter: 30m
+  approved-and-green:
+    auto: false
+    action: notify
