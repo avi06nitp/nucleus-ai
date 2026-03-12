@@ -18,3 +18,4 @@ spring:
   websocket:
     message-size-limit: 65536
     send-buffer-size-limit: 524288
+

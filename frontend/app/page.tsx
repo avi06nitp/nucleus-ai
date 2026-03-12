@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Atom, Plus } from 'lucide-react';
 import { Client } from '@stomp/stompjs';
-import { Session, SessionStatus } from '../types/session';
+import { Session, SessionStatus, Project } from '../types/session';
 import SessionCard from '../components/SessionCard';
 import SpawnModal from '../components/SpawnModal';
 import LogsModal from '../components/LogsModal';
@@ -28,6 +28,8 @@ const COLUMN_ACCENT: Record<SessionStatus, string> = {
 
 export default function Dashboard() {
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectFilter, setProjectFilter] = useState<string>('');
   const [showSpawn, setShowSpawn] = useState(false);
   const [logsSession, setLogsSession] = useState<Session | null>(null);
 
@@ -42,10 +44,22 @@ export default function Dashboard() {
     }
   }, []);
 
+  const fetchProjects = useCallback(async () => {
+    try {
+      const res = await fetch('/api/projects');
+      if (!res.ok) return;
+      const data: Project[] = await res.json();
+      setProjects(data);
+    } catch (err) {
+      console.error('Failed to fetch projects', err);
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
     fetchSessions();
-  }, [fetchSessions]);
+    fetchProjects();
+  }, [fetchSessions, fetchProjects]);
 
   // WebSocket for live updates
   useEffect(() => {
@@ -76,8 +90,12 @@ export default function Dashboard() {
     return () => { client.deactivate(); };
   }, []);
 
+  const filteredSessions = projectFilter
+    ? sessions.filter((s) => s.projectName === projectFilter)
+    : sessions;
+
   const sessionsFor = (status: SessionStatus) =>
-    sessions.filter((s) => s.status === status);
+    filteredSessions.filter((s) => s.status === status);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#0A0F1E' }}>
@@ -90,13 +108,32 @@ export default function Dashboard() {
           <Atom size={24} className="text-blue-400" />
           <span className="text-white font-semibold text-lg tracking-tight">Nucleus AI</span>
         </div>
-        <button
-          onClick={() => setShowSpawn(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
-        >
-          <Plus size={16} />
-          Spawn Agent
-        </button>
+
+        <div className="flex items-center gap-3">
+          {/* Project filter dropdown */}
+          {projects.length > 0 && (
+            <select
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-lg bg-[#0A0F1E] border border-gray-700 text-white text-sm focus:outline-none focus:border-blue-500"
+            >
+              <option value="">All projects</option>
+              {projects.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <button
+            onClick={() => setShowSpawn(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+          >
+            <Plus size={16} />
+            Spawn Agent
+          </button>
+        </div>
       </header>
 
       {/* Kanban board */}

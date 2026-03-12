@@ -3,8 +3,6 @@ package com.visa.nucleus.api;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.service.OrchestratorService;
 import com.visa.nucleus.core.service.SessionManager;
-import com.visa.nucleus.core.plugin.AgentPlugin;
-import com.visa.nucleus.core.plugin.RuntimePlugin;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -15,6 +13,10 @@ import java.util.List;
 /**
  * REST API for managing agent sessions. Broadcasts session-state changes
  * over WebSocket to all connected dashboard clients.
+ *
+ * <p>Agent and runtime plugins are resolved per-session via the OrchestratorService
+ * so that multi-project configurations with different agent types and runtimes
+ * are handled transparently.</p>
  */
 @RestController
 @RequestMapping("/api/sessions")
@@ -22,19 +24,13 @@ public class SessionController {
 
     private final OrchestratorService orchestratorService;
     private final SessionManager sessionManager;
-    private final AgentPlugin agentPlugin;
-    private final RuntimePlugin runtimePlugin;
     private final SimpMessagingTemplate messagingTemplate;
 
     public SessionController(OrchestratorService orchestratorService,
                              SessionManager sessionManager,
-                             AgentPlugin agentPlugin,
-                             RuntimePlugin runtimePlugin,
                              SimpMessagingTemplate messagingTemplate) {
         this.orchestratorService = orchestratorService;
         this.sessionManager = sessionManager;
-        this.agentPlugin = agentPlugin;
-        this.runtimePlugin = runtimePlugin;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -97,6 +93,7 @@ public class SessionController {
      * POST /api/sessions/{id}/message
      * Body: { message }
      * Lets engineers manually send instructions to a running agent.
+     * Routes to the correct AgentPlugin based on the session's agent type.
      */
     @PostMapping("/{id}/message")
     public ResponseEntity<Void> sendMessage(@PathVariable String id,
@@ -104,20 +101,21 @@ public class SessionController {
         if (sessionManager.getSession(id).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        agentPlugin.sendMessage(id, request.message());
+        orchestratorService.agentPluginForSession(id).sendMessage(id, request.message());
         return ResponseEntity.ok().build();
     }
 
     /**
      * GET /api/sessions/{id}/logs
      * Returns the runtime logs for a session.
+     * Routes to the correct RuntimePlugin based on the session's project runtime.
      */
     @GetMapping("/{id}/logs")
     public ResponseEntity<String> getLogs(@PathVariable String id) throws Exception {
         if (sessionManager.getSession(id).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        String logs = runtimePlugin.getLogs(id);
+        String logs = orchestratorService.runtimePluginForSession(id).getLogs(id);
         return ResponseEntity.ok(logs);
     }
 
