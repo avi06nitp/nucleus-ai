@@ -169,6 +169,53 @@ class WebhookControllerTest {
     }
 
     // -------------------------------------------------------------------------
+    // GitHub – pull_request_review (approved-and-green)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void handleGitHubEvent_pullRequestReviewApproved_callsOnApprovedAndGreen() throws Exception {
+        AgentSession session = new AgentSession("proj", "ISSUE-42");
+        session.setBranchName(BRANCH);
+        when(sessionRepository.findByBranchName(BRANCH)).thenReturn(Optional.of(session));
+
+        String prUrl = "https://github.example.com/visa-org/nucleus/pull/42";
+        String json = """
+                {
+                  "review": { "state": "approved" },
+                  "pull_request": {
+                    "head": { "ref": "%s" },
+                    "html_url": "%s"
+                  }
+                }
+                """.formatted(BRANCH, prUrl);
+        byte[] body = json.getBytes(StandardCharsets.UTF_8);
+
+        ResponseEntity<String> response = controller.handleGitHubEvent(
+                "pull_request_review", computeSignature(SECRET, body), body);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(reactionEngine).onApprovedAndGreen(eq(session.getSessionId()), eq(prUrl));
+        verify(reactionEventRepository).save(any());
+    }
+
+    @Test
+    void handleGitHubEvent_pullRequestReviewChangesRequested_doesNotCallApprovedAndGreen() throws Exception {
+        String json = """
+                {
+                  "review": { "state": "changes_requested" },
+                  "pull_request": { "head": { "ref": "%s" }, "html_url": "https://example.com/pull/1" }
+                }
+                """.formatted(BRANCH);
+        byte[] body = json.getBytes(StandardCharsets.UTF_8);
+
+        ResponseEntity<String> response = controller.handleGitHubEvent(
+                "pull_request_review", computeSignature(SECRET, body), body);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verifyNoInteractions(reactionEngine);
+    }
+
+    // -------------------------------------------------------------------------
     // GitHub – pull_request merged
     // -------------------------------------------------------------------------
 

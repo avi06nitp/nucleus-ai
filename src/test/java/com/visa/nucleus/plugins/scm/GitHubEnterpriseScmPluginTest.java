@@ -185,6 +185,34 @@ class GitHubEnterpriseScmPluginTest {
     }
 
     // ------------------------------------------------------------------
+    // mergePullRequest
+    // ------------------------------------------------------------------
+
+    @Test
+    void mergePullRequest_callsMergeEndpointWithPut() throws Exception {
+        when(restTemplate.exchange(
+                contains("/pulls/42/merge"),
+                eq(HttpMethod.PUT),
+                any(HttpEntity.class),
+                eq(Void.class)))
+                .thenReturn(new ResponseEntity<>(HttpStatus.OK));
+
+        assertDoesNotThrow(() -> plugin.mergePullRequest(PR_URL));
+
+        verify(restTemplate).exchange(
+                contains("/pulls/42/merge"),
+                eq(HttpMethod.PUT),
+                any(HttpEntity.class),
+                eq(Void.class));
+    }
+
+    @Test
+    void mergePullRequest_throwsForInvalidPrUrl() {
+        assertThrows(IllegalArgumentException.class,
+                () -> plugin.mergePullRequest("https://github.example.com/visa-org/nucleus/issues/42"));
+    }
+
+    // ------------------------------------------------------------------
     // helper – URL parsing
     // ------------------------------------------------------------------
 
