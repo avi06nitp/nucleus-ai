@@ -11,12 +11,33 @@ defaults:
   notifiers: [teams]       # teams | slack | desktop | webhook
 
 projects:
-  my-app:
-    repo: owner/my-app
-    path: ~/my-app
+  nucleus-ai:
+    repo: avi06nitp/nucleus-ai
+    path: /Users/avi/Desktop/nucleus-ai
     defaultBranch: main
-    jiraProjectKey: MYAPP
-    sessionPrefix: app
+    jiraProjectKey: NA
+    agentType: claude
+    runtime: docker
+    sessionPrefix: na
+
+  # Example: add more projects here
+  # my-app:
+  #   repo: owner/my-app
+  #   path: ~/my-app
+  #   defaultBranch: main
+  #   jiraProjectKey: MYAPP
+  #   agentType: claude
+  #   runtime: docker
+  #   sessionPrefix: app
+  #
+  # other-service:
+  #   repo: owner/other-service
+  #   path: ~/other-service
+  #   defaultBranch: develop
+  #   jiraProjectKey: SVC
+  #   agentType: openai
+  #   runtime: tmux
+  #   sessionPrefix: svc
 
 reactions:
   ci-failed:

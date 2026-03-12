@@ -1,10 +1,10 @@
 package com.visa.nucleus.api;
 
 import com.visa.nucleus.core.AgentSession;
-import com.visa.nucleus.core.service.OrchestratorService;
-import com.visa.nucleus.core.service.SessionManager;
 import com.visa.nucleus.core.plugin.AgentPlugin;
 import com.visa.nucleus.core.plugin.RuntimePlugin;
+import com.visa.nucleus.core.service.OrchestratorService;
+import com.visa.nucleus.core.service.SessionManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,8 +34,7 @@ class SessionControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new SessionController(
-                orchestratorService, sessionManager, agentPlugin, runtimePlugin, messagingTemplate);
+        controller = new SessionController(orchestratorService, sessionManager, messagingTemplate);
     }
 
     // ------------------------------------------------------------------
@@ -141,6 +140,7 @@ class SessionControllerTest {
     void sendMessage_forwardsToAgentPlugin() throws Exception {
         AgentSession session = new AgentSession("proj", "PROJ-1");
         when(sessionManager.getSession(session.getSessionId())).thenReturn(Optional.of(session));
+        when(orchestratorService.agentPluginForSession(session.getSessionId())).thenReturn(agentPlugin);
 
         ResponseEntity<Void> response = controller.sendMessage(
                 session.getSessionId(), new SessionController.MessageRequest("please add tests"));
@@ -168,6 +168,7 @@ class SessionControllerTest {
     void getLogs_returnsLogsFromRuntimePlugin() throws Exception {
         AgentSession session = new AgentSession("proj", "PROJ-1");
         when(sessionManager.getSession(session.getSessionId())).thenReturn(Optional.of(session));
+        when(orchestratorService.runtimePluginForSession(session.getSessionId())).thenReturn(runtimePlugin);
         when(runtimePlugin.getLogs(session.getSessionId())).thenReturn("line1\nline2\n");
 
         ResponseEntity<String> response = controller.getLogs(session.getSessionId());
