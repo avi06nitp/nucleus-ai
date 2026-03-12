@@ -7,4 +7,5 @@ public interface ScmPlugin {
     List<String> getReviewComments(String prUrl) throws Exception;
     String getCiLogs(String prUrl) throws Exception;
     void replyToComment(String commentId, String reply) throws Exception;
+    void mergePullRequest(String prUrl) throws Exception;
 }
