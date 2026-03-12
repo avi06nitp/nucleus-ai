@@ -157,6 +157,21 @@ public class GitHubEnterpriseScmPlugin implements ScmPlugin {
         restTemplate.exchange(url, HttpMethod.POST, request, Void.class);
     }
 
+    /**
+     * Merges the pull request identified by prUrl using a merge commit.
+     * PUT /repos/{owner}/{repo}/pulls/{prNumber}/merge
+     */
+    @Override
+    public void mergePullRequest(String prUrl) throws Exception {
+        int prNumber = extractPrNumber(prUrl);
+        String url = baseUrl + "/repos/" + owner + "/" + repo + "/pulls/" + prNumber + "/merge";
+
+        Map<String, String> payload = Map.of("merge_method", "merge");
+        HttpEntity<Map<String, String>> request = new HttpEntity<>(payload, authHeaders());
+
+        restTemplate.exchange(url, HttpMethod.PUT, request, Void.class);
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.AgentSessionRepository;
 import com.visa.nucleus.core.ReactionEvent;
 import com.visa.nucleus.core.ReactionEventRepository;
-import com.visa.nucleus.core.service.OrchestratorService;
+import com.visa.nucleus.core.service.ReactionEngine;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -47,19 +47,19 @@ public class WebhookController {
     private static final Logger log = Logger.getLogger(WebhookController.class.getName());
     private static final String HMAC_ALGORITHM = "HmacSHA256";
 
-    private final OrchestratorService orchestratorService;
+    private final ReactionEngine reactionEngine;
     private final AgentSessionRepository sessionRepository;
     private final ReactionEventRepository reactionEventRepository;
     private final ObjectMapper objectMapper;
     private final String webhookSecret;
 
     public WebhookController(
-            OrchestratorService orchestratorService,
+            ReactionEngine reactionEngine,
             AgentSessionRepository sessionRepository,
             ReactionEventRepository reactionEventRepository,
             ObjectMapper objectMapper,
             @Value("${GITHUB_WEBHOOK_SECRET:}") String webhookSecret) {
-        this.orchestratorService = orchestratorService;
+        this.reactionEngine = reactionEngine;
         this.sessionRepository = sessionRepository;
         this.reactionEventRepository = reactionEventRepository;
         this.objectMapper = objectMapper;
@@ -99,6 +99,7 @@ public class WebhookController {
             switch (eventType) {
                 case "check_run" -> handleCheckRun(payload);
                 case "pull_request_review_comment" -> handleReviewComment(payload);
+                case "pull_request_review" -> handlePullRequestReview(payload);
                 case "pull_request" -> handlePullRequest(payload);
                 default -> log.fine("Ignoring unhandled GitHub event type: " + eventType);
             }
@@ -166,9 +167,9 @@ public class WebhookController {
         }
 
         String ciLogs = payload.path("check_run").path("output").path("text").asText("");
-        log.info("CI failure detected for branch '" + branchName + "', notifying orchestrator");
+        log.info("CI failure detected for branch '" + branchName + "', dispatching to ReactionEngine");
         String sessionId = sessionOpt.get().getSessionId();
-        orchestratorService.handleCiFailure(sessionId, ciLogs);
+        reactionEngine.onCiFailed(sessionId, ciLogs);
 
         ReactionEvent event = new ReactionEvent();
         event.setSessionId(sessionId);
@@ -191,14 +192,41 @@ public class WebhookController {
         }
 
         String commentBody = payload.path("comment").path("body").asText("");
-        log.info("Review comment received for branch '" + branchName + "', notifying orchestrator");
+        log.info("Review comment received for branch '" + branchName + "', dispatching to ReactionEngine");
         String sessionId = sessionOpt.get().getSessionId();
-        orchestratorService.handleReviewComment(sessionId, commentBody);
+        reactionEngine.onChangesRequested(sessionId, commentBody);
 
         ReactionEvent event = new ReactionEvent();
         event.setSessionId(sessionId);
         event.setEventType("REVIEW_COMMENT");
         event.setPayload(commentBody);
+        event.setCreatedAt(LocalDateTime.now());
+        reactionEventRepository.save(event);
+    }
+
+    private void handlePullRequestReview(JsonNode payload) throws Exception {
+        String state = payload.path("review").path("state").asText("");
+        if (!"approved".equalsIgnoreCase(state)) {
+            return;
+        }
+
+        String branchName = payload.path("pull_request").path("head").path("ref").asText("");
+        String prUrl = payload.path("pull_request").path("html_url").asText("");
+
+        Optional<AgentSession> sessionOpt = sessionRepository.findByBranchName(branchName);
+        if (sessionOpt.isEmpty()) {
+            log.fine("No session found for branch '" + branchName + "' on PR review approved event");
+            return;
+        }
+
+        String sessionId = sessionOpt.get().getSessionId();
+        log.info("PR approved for branch '" + branchName + "', dispatching approved-and-green to ReactionEngine");
+        reactionEngine.onApprovedAndGreen(sessionId, prUrl);
+
+        ReactionEvent event = new ReactionEvent();
+        event.setSessionId(sessionId);
+        event.setEventType("APPROVED_AND_GREEN");
+        event.setPayload(prUrl);
         event.setCreatedAt(LocalDateTime.now());
         reactionEventRepository.save(event);
     }
