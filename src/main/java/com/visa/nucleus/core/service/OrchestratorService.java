@@ -182,6 +182,7 @@ public class OrchestratorService {
 
         session.setStatus(AgentSession.Status.RUNNING);
         sessionManager.save(session);
+
         return session;
     }
 
