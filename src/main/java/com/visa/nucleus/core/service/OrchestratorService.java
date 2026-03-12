@@ -16,6 +16,7 @@ import com.visa.nucleus.plugins.runtime.RuntimePluginFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
+import java.util.List;
 
 /**
  * OrchestratorService is the main brain that coordinates all six plugins.
@@ -35,7 +36,7 @@ public class OrchestratorService {
     private final WorkspacePlugin workspacePlugin;
     private final AgentPluginFactory agentPluginFactory;
     private final RuntimePluginFactory runtimePluginFactory;
-    private final NotifierPlugin notifierPlugin;
+    private final List<NotifierPlugin> notifierPlugins;
     private final NucleusProperties nucleusProperties;
 
     public OrchestratorService(
@@ -45,7 +46,7 @@ public class OrchestratorService {
             WorkspacePlugin workspacePlugin,
             AgentPluginFactory agentPluginFactory,
             RuntimePluginFactory runtimePluginFactory,
-            NotifierPlugin notifierPlugin,
+            List<NotifierPlugin> notifierPlugins,
             NucleusProperties nucleusProperties) {
         this.sessionManager = sessionManager;
         this.projectService = projectService;
@@ -53,7 +54,7 @@ public class OrchestratorService {
         this.workspacePlugin = workspacePlugin;
         this.agentPluginFactory = agentPluginFactory;
         this.runtimePluginFactory = runtimePluginFactory;
-        this.notifierPlugin = notifierPlugin;
+        this.notifierPlugins = notifierPlugins;
         this.nucleusProperties = nucleusProperties;
     }
 
@@ -159,9 +160,11 @@ public class OrchestratorService {
         session.incrementCiRetryCount();
 
         if (session.getCiRetryCount() > maxCiRetries(session.getProjectName())) {
-            notifierPlugin.notify(sessionId,
-                    "Session " + sessionId + " has failed CI " + session.getCiRetryCount() + " times and needs attention.",
-                    NotificationLevel.NEEDS_ATTENTION);
+            for (NotifierPlugin notifier : notifierPlugins) {
+                notifier.notify(sessionId,
+                        "Session " + sessionId + " has failed CI " + session.getCiRetryCount() + " times and needs attention.",
+                        NotificationLevel.NEEDS_ATTENTION);
+            }
         }
 
         sessionManager.save(session);
