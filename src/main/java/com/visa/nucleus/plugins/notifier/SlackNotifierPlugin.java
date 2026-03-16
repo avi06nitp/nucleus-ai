@@ -34,6 +34,10 @@ public class SlackNotifierPlugin implements NotifierPlugin {
         );
     }
 
+    public SlackNotifierPlugin(String webhookUrl) {
+        this(webhookUrl, null, null, HttpClient.newHttpClient());
+    }
+
     // Package-private constructor for testing
     SlackNotifierPlugin(String webhookUrl, String botToken, String channel, HttpClient httpClient) {
         this.webhookUrl = webhookUrl;
