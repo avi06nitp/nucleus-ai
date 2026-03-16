@@ -14,9 +14,11 @@ import org.springframework.stereotype.Component;
 public class RuntimePluginFactory {
 
     private final DockerRuntimePlugin dockerPlugin;
+    private final TmuxRuntimePlugin tmuxPlugin;
 
-    public RuntimePluginFactory() {
-        this.dockerPlugin = new DockerRuntimePlugin();
+    public RuntimePluginFactory(DockerRuntimePlugin dockerPlugin, TmuxRuntimePlugin tmuxPlugin) {
+        this.dockerPlugin = dockerPlugin;
+        this.tmuxPlugin = tmuxPlugin;
     }
 
     /**
@@ -27,8 +29,7 @@ public class RuntimePluginFactory {
      */
     public RuntimePlugin create(String runtime) {
         if ("tmux".equalsIgnoreCase(runtime)) {
-            // Tmux support is not yet implemented; fall back to Docker
-            return dockerPlugin;
+            return tmuxPlugin;
         }
         // Default: docker
         return dockerPlugin;
