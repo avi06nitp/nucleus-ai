@@ -13,6 +13,7 @@ import com.visa.nucleus.core.plugin.TrackerPlugin;
 import com.visa.nucleus.core.plugin.WorkspacePlugin;
 import com.visa.nucleus.plugins.agent.AgentPluginFactory;
 import com.visa.nucleus.plugins.runtime.RuntimePluginFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -34,8 +35,8 @@ public class OrchestratorService {
     private final ProjectService projectService;
     private final TrackerPlugin trackerPlugin;
     private final WorkspacePlugin workspacePlugin;
-    private final RuntimePlugin runtimePlugin;
-    private final AgentPlugin agentPlugin;
+    private final AgentPluginFactory agentPluginFactory;
+    private final RuntimePluginFactory runtimePluginFactory;
     private final List<NotifierPlugin> notifierPlugins;
     private final NucleusProperties nucleusProperties;
 
@@ -44,8 +45,8 @@ public class OrchestratorService {
             ProjectService projectService,
             TrackerPlugin trackerPlugin,
             WorkspacePlugin workspacePlugin,
-            RuntimePlugin runtimePlugin,
-            AgentPlugin agentPlugin,
+            AgentPluginFactory agentPluginFactory,
+            RuntimePluginFactory runtimePluginFactory,
             List<NotifierPlugin> notifierPlugins,
             NucleusProperties nucleusProperties,
             @Value("${NUCLEUS_REPO_PATH:/tmp}") String repoPath) {
@@ -53,8 +54,8 @@ public class OrchestratorService {
         this.projectService = projectService;
         this.trackerPlugin = trackerPlugin;
         this.workspacePlugin = workspacePlugin;
-        this.runtimePlugin = runtimePlugin;
-        this.agentPlugin = agentPlugin;
+        this.agentPluginFactory = agentPluginFactory;
+        this.runtimePluginFactory = runtimePluginFactory;
         this.notifierPlugins = notifierPlugins;
         this.nucleusProperties = nucleusProperties;
     }
@@ -179,6 +180,32 @@ public class OrchestratorService {
 
         session.setStatus(AgentSession.Status.RUNNING);
         sessionManager.save(session);
+    }
+
+    public AgentPlugin agentPluginForSession(String sessionId) throws Exception {
+        AgentSession session = sessionManager.getSession(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
+        return agentPluginFactory.create(resolveAgentType(session));
+    }
+
+    public RuntimePlugin runtimePluginForSession(String sessionId) throws Exception {
+        AgentSession session = sessionManager.getSession(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
+        return runtimePluginFactory.create(resolveRuntime(session));
+    }
+
+    private String resolveAgentType(AgentSession session) {
+        Project project = projectService.getProject(session.getProjectName()).orElse(null);
+        if (project != null && project.getAgentType() != null) return project.getAgentType();
+        String def = nucleusProperties.getDefaults().getAgent();
+        return def != null ? def : DEFAULT_AGENT_TYPE;
+    }
+
+    private String resolveRuntime(AgentSession session) {
+        Project project = projectService.getProject(session.getProjectName()).orElse(null);
+        if (project != null && project.getRuntime() != null) return project.getRuntime();
+        String def = nucleusProperties.getDefaults().getRuntime();
+        return def != null ? def : DEFAULT_RUNTIME;
     }
 
     private void notifyAll(String sessionId, String message, NotificationLevel level) throws Exception {

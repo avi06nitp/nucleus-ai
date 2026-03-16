@@ -25,8 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -60,10 +58,18 @@ class OrchestratorServiceTest {
         when(sessionRepository.findById(anyString())).thenAnswer(inv ->
                 Optional.ofNullable(store.get((String) inv.getArgument(0))));
 
+        NucleusProperties.Defaults defaults = new NucleusProperties.Defaults();
+        when(nucleusProperties.getDefaults()).thenReturn(defaults);
+        when(nucleusProperties.getReactions()).thenReturn(new HashMap<>());
+
+        when(agentPluginFactory.create(anyString())).thenReturn(agentPlugin);
+        when(runtimePluginFactory.create(anyString())).thenReturn(runtimePlugin);
+
         sessionManager = new SessionManager(sessionRepository);
         orchestrator = new OrchestratorService(
-                sessionManager, trackerPlugin, workspacePlugin,
-                runtimePlugin, agentPlugin, List.of(notifierPlugin), nucleusProperties, "/repo");
+                sessionManager, projectService, trackerPlugin, workspacePlugin,
+                agentPluginFactory, runtimePluginFactory, List.of(notifierPlugin),
+                nucleusProperties, "/repo");
     }
 
     @Test
@@ -235,5 +241,16 @@ class OrchestratorServiceTest {
         sessionManager.save(session);
 
         assertThrows(IllegalStateException.class, () -> orchestrator.restore(session.getSessionId()));
+    }
+
+    // ------------------------------------------------------------------
+    // helpers
+    // ------------------------------------------------------------------
+
+    private Project project(String name) {
+        Project p = new Project();
+        p.setName(name);
+        p.setPath("/repo");
+        return p;
     }
 }
