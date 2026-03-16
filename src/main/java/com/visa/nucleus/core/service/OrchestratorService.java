@@ -48,8 +48,7 @@ public class OrchestratorService {
             AgentPluginFactory agentPluginFactory,
             RuntimePluginFactory runtimePluginFactory,
             List<NotifierPlugin> notifierPlugins,
-            NucleusProperties nucleusProperties,
-            @Value("${NUCLEUS_REPO_PATH:/tmp}") String repoPath) {
+            NucleusProperties nucleusProperties) {
         this.sessionManager = sessionManager;
         this.projectService = projectService;
         this.trackerPlugin = trackerPlugin;
@@ -182,12 +181,20 @@ public class OrchestratorService {
         sessionManager.save(session);
     }
 
+    /**
+     * Returns the AgentPlugin for the given session's project agent type.
+     * Used by SessionController to route manual messages to the correct agent.
+     */
     public AgentPlugin agentPluginForSession(String sessionId) throws Exception {
         AgentSession session = sessionManager.getSession(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
         return agentPluginFactory.create(resolveAgentType(session));
     }
 
+    /**
+     * Returns the RuntimePlugin for the given session's project runtime.
+     * Used by SessionController to fetch runtime logs for the correct backend.
+     */
     public RuntimePlugin runtimePluginForSession(String sessionId) throws Exception {
         AgentSession session = sessionManager.getSession(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
