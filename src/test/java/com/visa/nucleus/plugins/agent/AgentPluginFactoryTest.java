@@ -1,13 +1,15 @@
 package com.visa.nucleus.plugins.agent;
 
 import com.visa.nucleus.core.plugin.AgentPlugin;
+import com.visa.nucleus.plugins.runtime.DockerRuntimePlugin;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 class AgentPluginFactoryTest {
 
-    private final AgentPluginFactory factory = new AgentPluginFactory();
+    private final AgentPluginFactory factory = new AgentPluginFactory(mock(DockerRuntimePlugin.class));
 
     @Test
     void create_returnsClaude() {

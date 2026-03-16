@@ -71,7 +71,7 @@ export default function Dashboard() {
           try {
             const updated: Session = JSON.parse(msg.body);
             setSessions((prev) => {
-              const idx = prev.findIndex((s) => s.id === updated.id);
+              const idx = prev.findIndex((s) => s.sessionId === updated.sessionId);
               if (idx >= 0) {
                 const next = [...prev];
                 next[idx] = updated;
@@ -156,7 +156,7 @@ export default function Dashboard() {
               ) : (
                 sessionsFor(status).map((session) => (
                   <SessionCard
-                    key={session.id}
+                    key={session.sessionId}
                     session={session}
                     onViewLogs={setLogsSession}
                   />

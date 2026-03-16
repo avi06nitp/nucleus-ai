@@ -35,7 +35,7 @@ class EscalationSchedulerTest {
 
     @BeforeEach
     void setUp() {
-        scheduler = new EscalationScheduler(sessionRepository, notifierPlugin, nucleusProperties);
+        scheduler = new EscalationScheduler(sessionRepository, List.of(notifierPlugin), nucleusProperties);
         when(nucleusProperties.getReactions()).thenReturn(new HashMap<>());
     }
 

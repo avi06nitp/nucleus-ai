@@ -11,7 +11,7 @@ port: 3000
 
 defaults:
   runtime: tmux            # docker | tmux
-  agent: claude            # claude | openai
+  agent: openai            # claude | openai
   workspace: worktree      # worktree | clone
   tracker: jira            # jira | github | linear  (per-project override takes precedence)
   notifiers: [teams]       # teams | slack | desktop | webhook
@@ -34,8 +34,8 @@ projects:
     path: /Users/avi/Desktop/nucleus-ai
     defaultBranch: main
     tracker: github          # jira | github | linear
-    agentType: claude
-    runtime: docker
+    agentType: openai
+    runtime: tmux
     sessionPrefix: na
 
   # Example: add more projects here

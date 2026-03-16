@@ -52,7 +52,7 @@ export default function SessionCard({ session, onViewLogs }: Props) {
   const handleRestore = async () => {
     setRestoring(true);
     try {
-      await fetch(`/api/sessions/${session.id}/restore`, { method: 'POST' });
+      await fetch(`/api/sessions/${session.sessionId}/restore`, { method: 'POST' });
     } catch (err) {
       console.error('Failed to restore session', err);
     } finally {
@@ -63,7 +63,7 @@ export default function SessionCard({ session, onViewLogs }: Props) {
   const handleSendMessage = async () => {
     if (!message.trim()) return;
     try {
-      await fetch(`/api/sessions/${session.id}/message`, {
+      await fetch(`/api/sessions/${session.sessionId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message }),

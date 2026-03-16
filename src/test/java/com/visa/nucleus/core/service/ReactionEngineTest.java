@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -39,7 +40,7 @@ class ReactionEngineTest {
 
     @BeforeEach
     void setUp() {
-        engine = new ReactionEngine(orchestratorService, notifierPlugin, scmPlugin, sessionManager, nucleusProperties);
+        engine = new ReactionEngine(orchestratorService, List.of(notifierPlugin), scmPlugin, sessionManager, nucleusProperties);
 
         session = new AgentSession("proj", "T-1");
         when(sessionManager.getSession(SESSION_ID)).thenReturn(Optional.of(session));

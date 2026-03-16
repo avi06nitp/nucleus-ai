@@ -162,6 +162,43 @@ public class OpenAIAgentPlugin implements AgentPlugin {
         }
     }
 
+    @Override
+    public String getLogs(String sessionId) {
+        List<String[]> history = conversations.get(sessionId);
+        if (history == null || history.isEmpty()) return "(no activity yet)";
+        StringBuilder sb = new StringBuilder();
+        for (String[] entry : history) {
+            boolean isRaw = entry.length > 2 && "raw".equals(entry[2]);
+            if (isRaw) {
+                // Extract tool name and result for display
+                String raw = entry[1];
+                if (raw.contains("\"tool_calls\"")) {
+                    String toolName = extractSimpleStringValue(raw, "name");
+                    String args = extractSimpleStringValue(raw, "arguments");
+                    if (!toolName.isEmpty()) {
+                        sb.append("[TOOL CALL] ").append(toolName);
+                        if (!args.isEmpty()) sb.append(" ← ").append(args);
+                        sb.append("\n");
+                    }
+                } else if (raw.contains("\"role\":\"tool\"")) {
+                    String result = extractSimpleStringValue(raw, "content");
+                    sb.append("[TOOL RESULT] ").append(result).append("\n\n");
+                }
+                continue;
+            }
+            String role = entry[0];
+            String content = entry[1];
+            if ("user".equals(role)) {
+                sb.append("[USER] ").append(content).append("\n\n");
+            } else if ("assistant".equals(role)) {
+                if (!content.isBlank()) {
+                    sb.append("[AGENT] ").append(content).append("\n\n");
+                }
+            }
+        }
+        return sb.toString().strip();
+    }
+
     private String buildSystemPrompt(String issueContext, String sessionId) {
         String ticketId = extractTicketId(sessionId);
         return "You are an autonomous coding agent working on: " + issueContext + "\n"
@@ -218,7 +255,8 @@ public class OpenAIAgentPlugin implements AgentPlugin {
                 }
                 case "run_command": {
                     String command = extractSimpleStringValue(argumentsJson, "command");
-                    return toolExecutor.executeInContainer(sessionId, command);
+                    String worktree = worktreePaths.getOrDefault(sessionId, "/tmp");
+                    return toolExecutor.executeInWorktree(worktree, command);
                 }
                 case "read_file": {
                     String path = extractSimpleStringValue(argumentsJson, "path");
