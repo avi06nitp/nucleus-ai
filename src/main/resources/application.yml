@@ -6,6 +6,8 @@ nucleus:
     runtime: tmux   # or docker
 
 spring:
+  config:
+    import: optional:classpath:agent-orchestrator.yaml
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME:nucleus_ai}
     username: ${DB_USERNAME:nucleus}

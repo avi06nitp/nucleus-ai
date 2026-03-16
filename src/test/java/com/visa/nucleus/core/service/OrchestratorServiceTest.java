@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -60,27 +62,8 @@ class OrchestratorServiceTest {
 
         sessionManager = new SessionManager(sessionRepository);
         orchestrator = new OrchestratorService(
-                sessionManager, projectService, trackerPlugin, workspacePlugin,
-                agentPluginFactory, runtimePluginFactory, List.of(notifierPlugin), nucleusProperties);
-
-        // Default factory behaviour
-        when(agentPluginFactory.create(anyString())).thenReturn(agentPlugin);
-        when(runtimePluginFactory.create(anyString())).thenReturn(runtimePlugin);
-
-        // Default NucleusProperties behaviour
-        NucleusProperties.Defaults defaults = new NucleusProperties.Defaults();
-        when(nucleusProperties.getDefaults()).thenReturn(defaults);
-        when(nucleusProperties.getReactions()).thenReturn(new java.util.HashMap<>());
-    }
-
-    /** Builds a minimal Project so projectService.getProject() resolves. */
-    private Project project(String name) {
-        Project p = new Project();
-        p.setName(name);
-        p.setPath("/repo");
-        p.setAgentType("claude");
-        p.setRuntime("docker");
-        return p;
+                sessionManager, trackerPlugin, workspacePlugin,
+                runtimePlugin, agentPlugin, List.of(notifierPlugin), nucleusProperties, "/repo");
     }
 
     @Test
