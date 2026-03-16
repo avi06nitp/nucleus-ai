@@ -3,12 +3,15 @@ package com.visa.nucleus.core.service;
 import com.visa.nucleus.config.NucleusProperties;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.AgentSessionRepository;
+import com.visa.nucleus.core.Project;
 import com.visa.nucleus.core.plugin.AgentPlugin;
 import com.visa.nucleus.core.plugin.NotificationLevel;
 import com.visa.nucleus.core.plugin.NotifierPlugin;
 import com.visa.nucleus.core.plugin.RuntimePlugin;
 import com.visa.nucleus.core.plugin.TrackerPlugin;
 import com.visa.nucleus.core.plugin.WorkspacePlugin;
+import com.visa.nucleus.plugins.agent.AgentPluginFactory;
+import com.visa.nucleus.plugins.runtime.RuntimePluginFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -37,6 +41,9 @@ class OrchestratorServiceTest {
     @Mock AgentPlugin agentPlugin;
     @Mock NotifierPlugin notifierPlugin;
     @Mock AgentSessionRepository sessionRepository;
+    @Mock AgentPluginFactory agentPluginFactory;
+    @Mock RuntimePluginFactory runtimePluginFactory;
+    @Mock ProjectService projectService;
     @Mock NucleusProperties nucleusProperties;
 
     private OrchestratorService orchestrator;
@@ -61,6 +68,7 @@ class OrchestratorServiceTest {
 
     @Test
     void spawn_creates_running_session() throws Exception {
+        when(projectService.getProject("my-project")).thenReturn(Optional.of(project("my-project")));
         when(trackerPlugin.getIssueContext("T-1")).thenReturn("Issue context");
         when(workspacePlugin.generateBranchName("T-1", "my-project")).thenReturn("feat/T-1-my-project");
         when(workspacePlugin.createWorktree("/repo", "feat/T-1-my-project")).thenReturn("/tmp/worktrees/feat/T-1-my-project");
@@ -77,6 +85,7 @@ class OrchestratorServiceTest {
 
     @Test
     void spawn_saves_session_to_repository() throws Exception {
+        when(projectService.getProject("proj")).thenReturn(Optional.of(project("proj")));
         when(trackerPlugin.getIssueContext(anyString())).thenReturn("ctx");
         when(workspacePlugin.generateBranchName(anyString(), anyString())).thenReturn("feat/branch");
         when(workspacePlugin.createWorktree(anyString(), anyString())).thenReturn("/tmp/worktrees/feat/branch");
@@ -87,7 +96,15 @@ class OrchestratorServiceTest {
     }
 
     @Test
+    void spawn_throws_for_unknown_project() {
+        when(projectService.getProject("unknown")).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () -> orchestrator.spawn("unknown", "T-X"));
+    }
+
+    @Test
     void terminate_stops_runtime_and_deletes_worktree() throws Exception {
+        when(projectService.getProject("proj")).thenReturn(Optional.of(project("proj")));
         when(trackerPlugin.getIssueContext(anyString())).thenReturn("ctx");
         when(workspacePlugin.generateBranchName(anyString(), anyString())).thenReturn("feat/branch");
         when(workspacePlugin.createWorktree(anyString(), anyString())).thenReturn("/tmp/wt/feat/branch");
@@ -108,6 +125,7 @@ class OrchestratorServiceTest {
 
     @Test
     void handleCiFailure_sends_message_and_increments_count() throws Exception {
+        when(projectService.getProject("proj")).thenReturn(Optional.of(project("proj")));
         when(trackerPlugin.getIssueContext(anyString())).thenReturn("ctx");
         when(workspacePlugin.generateBranchName(anyString(), anyString())).thenReturn("feat/branch");
         when(workspacePlugin.createWorktree(anyString(), anyString())).thenReturn("/tmp/wt");
@@ -122,6 +140,7 @@ class OrchestratorServiceTest {
 
     @Test
     void handleCiFailure_notifies_after_max_retries() throws Exception {
+        when(projectService.getProject("proj")).thenReturn(Optional.of(project("proj")));
         when(trackerPlugin.getIssueContext(anyString())).thenReturn("ctx");
         when(workspacePlugin.generateBranchName(anyString(), anyString())).thenReturn("feat/branch");
         when(workspacePlugin.createWorktree(anyString(), anyString())).thenReturn("/tmp/wt");
@@ -139,6 +158,7 @@ class OrchestratorServiceTest {
 
     @Test
     void handleCiFailure_does_not_notify_below_threshold() throws Exception {
+        when(projectService.getProject("proj")).thenReturn(Optional.of(project("proj")));
         when(trackerPlugin.getIssueContext(anyString())).thenReturn("ctx");
         when(workspacePlugin.generateBranchName(anyString(), anyString())).thenReturn("feat/branch");
         when(workspacePlugin.createWorktree(anyString(), anyString())).thenReturn("/tmp/wt");
@@ -154,6 +174,7 @@ class OrchestratorServiceTest {
 
     @Test
     void handleReviewComment_forwards_comment_and_sets_running() throws Exception {
+        when(projectService.getProject("proj")).thenReturn(Optional.of(project("proj")));
         when(trackerPlugin.getIssueContext(anyString())).thenReturn("ctx");
         when(workspacePlugin.generateBranchName(anyString(), anyString())).thenReturn("feat/branch");
         when(workspacePlugin.createWorktree(anyString(), anyString())).thenReturn("/tmp/wt");
@@ -178,7 +199,7 @@ class OrchestratorServiceTest {
 
     @Test
     void restore_recreates_worktree_and_restarts_agent() throws Exception {
-        // Build a FAILED session directly (no spawn) so mock interaction counts are clean
+        when(projectService.getProject("proj")).thenReturn(Optional.of(project("proj")));
         AgentSession session = new AgentSession("proj", "T-10");
         session.setStatus(AgentSession.Status.FAILED);
         session.setBranchName("feat/branch");
@@ -204,6 +225,7 @@ class OrchestratorServiceTest {
 
     @Test
     void restore_throws_for_session_in_non_restoreable_state() throws Exception {
+        when(projectService.getProject("proj")).thenReturn(Optional.of(project("proj")));
         when(trackerPlugin.getIssueContext(anyString())).thenReturn("ctx");
         when(workspacePlugin.generateBranchName(anyString(), anyString())).thenReturn("feat/branch");
         when(workspacePlugin.createWorktree(anyString(), anyString())).thenReturn("/tmp/wt");

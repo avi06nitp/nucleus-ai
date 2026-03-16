@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "projects")
 @Data
@@ -11,16 +13,28 @@ import lombok.NoArgsConstructor;
 public class Project {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+    private String name;          // e.g. "my-app" — used as primary key
 
-    private String name;
+    private String repo;           // "owner/repo"
 
-    private String repoUrl;
+    private String path;           // local filesystem path
 
-    private String defaultBranch;
+    private String defaultBranch;  // "main"
 
-    private String jiraProjectKey;
+    private String jiraProjectKey; // "MYAPP"
 
-    private String agentType;
+    private String agentType;      // "claude" or "openai"
+
+    private String runtime;        // "docker" or "tmux"
+
+    private String sessionPrefix;  // short name for branch prefixes
+
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
 }
