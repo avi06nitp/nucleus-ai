@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.AgentSessionRepository;
 import com.visa.nucleus.core.ReactionEventRepository;
-import com.visa.nucleus.core.service.OrchestratorService;
+import com.visa.nucleus.core.service.ReactionEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,7 +30,7 @@ class WebhookControllerTest {
     private static final String BRANCH = "feat/issue-42";
 
     @Mock
-    private OrchestratorService orchestratorService;
+    private ReactionEngine reactionEngine;
 
     @Mock
     private AgentSessionRepository sessionRepository;
@@ -43,7 +43,7 @@ class WebhookControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new WebhookController(orchestratorService, sessionRepository, reactionEventRepository, objectMapper, SECRET);
+        controller = new WebhookController(reactionEngine, sessionRepository, reactionEventRepository, objectMapper, SECRET);
     }
 
     // -------------------------------------------------------------------------
@@ -74,7 +74,7 @@ class WebhookControllerTest {
     @Test
     void verifySignature_skipsCheckWhenSecretNotConfigured() {
         WebhookController noSecretController =
-                new WebhookController(orchestratorService, sessionRepository, reactionEventRepository, objectMapper, "");
+                new WebhookController(reactionEngine, sessionRepository, reactionEventRepository, objectMapper, "");
         byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
         assertTrue(noSecretController.verifySignature(body, ""));
     }
@@ -104,7 +104,7 @@ class WebhookControllerTest {
                 "check_run", computeSignature(SECRET, body), body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(orchestratorService).handleCiFailure(eq(session.getSessionId()), eq("Build failed at step compile"));
+        verify(reactionEngine).onCiFailed(eq(session.getSessionId()), eq("Build failed at step compile"));
     }
 
     @Test
@@ -118,11 +118,11 @@ class WebhookControllerTest {
                 "check_run", computeSignature(SECRET, body), body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verifyNoInteractions(orchestratorService);
+        verifyNoInteractions(reactionEngine);
     }
 
     @Test
-    void handleGitHubEvent_checkRunFailure_noSession_doesNotCallOrchestrator() throws Exception {
+    void handleGitHubEvent_checkRunFailure_noSession_doesNotCallReactionEngine() throws Exception {
         when(sessionRepository.findByBranchName(BRANCH)).thenReturn(Optional.empty());
 
         String json = """
@@ -140,7 +140,7 @@ class WebhookControllerTest {
                 "check_run", computeSignature(SECRET, body), body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verifyNoInteractions(orchestratorService);
+        verifyNoInteractions(reactionEngine);
     }
 
     // -------------------------------------------------------------------------
@@ -165,7 +165,54 @@ class WebhookControllerTest {
                 "pull_request_review_comment", computeSignature(SECRET, body), body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(orchestratorService).handleReviewComment(eq(session.getSessionId()), eq("Please rename this variable."));
+        verify(reactionEngine).onChangesRequested(eq(session.getSessionId()), eq("Please rename this variable."));
+    }
+
+    // -------------------------------------------------------------------------
+    // GitHub – pull_request_review (approved-and-green)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void handleGitHubEvent_pullRequestReviewApproved_callsOnApprovedAndGreen() throws Exception {
+        AgentSession session = new AgentSession("proj", "ISSUE-42");
+        session.setBranchName(BRANCH);
+        when(sessionRepository.findByBranchName(BRANCH)).thenReturn(Optional.of(session));
+
+        String prUrl = "https://github.example.com/visa-org/nucleus/pull/42";
+        String json = """
+                {
+                  "review": { "state": "approved" },
+                  "pull_request": {
+                    "head": { "ref": "%s" },
+                    "html_url": "%s"
+                  }
+                }
+                """.formatted(BRANCH, prUrl);
+        byte[] body = json.getBytes(StandardCharsets.UTF_8);
+
+        ResponseEntity<String> response = controller.handleGitHubEvent(
+                "pull_request_review", computeSignature(SECRET, body), body);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(reactionEngine).onApprovedAndGreen(eq(session.getSessionId()), eq(prUrl));
+        verify(reactionEventRepository).save(any());
+    }
+
+    @Test
+    void handleGitHubEvent_pullRequestReviewChangesRequested_doesNotCallApprovedAndGreen() throws Exception {
+        String json = """
+                {
+                  "review": { "state": "changes_requested" },
+                  "pull_request": { "head": { "ref": "%s" }, "html_url": "https://example.com/pull/1" }
+                }
+                """.formatted(BRANCH);
+        byte[] body = json.getBytes(StandardCharsets.UTF_8);
+
+        ResponseEntity<String> response = controller.handleGitHubEvent(
+                "pull_request_review", computeSignature(SECRET, body), body);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verifyNoInteractions(reactionEngine);
     }
 
     // -------------------------------------------------------------------------
@@ -192,7 +239,7 @@ class WebhookControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(AgentSession.Status.MERGED, session.getStatus());
         verify(sessionRepository).save(session);
-        verifyNoInteractions(orchestratorService);
+        verifyNoInteractions(reactionEngine);
     }
 
     @Test
@@ -209,7 +256,7 @@ class WebhookControllerTest {
                 "pull_request", computeSignature(SECRET, body), body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verifyNoInteractions(sessionRepository);
+        verifyNoInteractions(sessionRepository, reactionEngine);
     }
 
     // -------------------------------------------------------------------------
@@ -223,7 +270,7 @@ class WebhookControllerTest {
                 controller.handleGitHubEvent("check_run", "sha256=badhash", body);
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
-        verifyNoInteractions(orchestratorService, sessionRepository);
+        verifyNoInteractions(reactionEngine, sessionRepository);
     }
 
     // -------------------------------------------------------------------------
