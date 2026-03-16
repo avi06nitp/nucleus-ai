@@ -1,6 +1,10 @@
 server:
   port: 8080
 
+nucleus:
+  defaults:
+    runtime: tmux   # or docker
+
 spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME:nucleus_ai}

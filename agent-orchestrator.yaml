@@ -5,7 +5,7 @@
 port: 3000
 
 defaults:
-  runtime: docker          # docker | tmux
+  runtime: tmux            # docker | tmux
   agent: claude            # claude | openai
   workspace: worktree      # worktree | clone
   notifiers: [teams]       # teams | slack | desktop | webhook
