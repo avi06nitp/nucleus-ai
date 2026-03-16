@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -60,7 +61,7 @@ class OrchestratorServiceTest {
         sessionManager = new SessionManager(sessionRepository);
         orchestrator = new OrchestratorService(
                 sessionManager, projectService, trackerPlugin, workspacePlugin,
-                agentPluginFactory, runtimePluginFactory, notifierPlugin, nucleusProperties);
+                agentPluginFactory, runtimePluginFactory, List.of(notifierPlugin), nucleusProperties);
 
         // Default factory behaviour
         when(agentPluginFactory.create(anyString())).thenReturn(agentPlugin);
