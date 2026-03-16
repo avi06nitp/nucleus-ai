@@ -13,7 +13,6 @@ import com.visa.nucleus.core.plugin.TrackerPlugin;
 import com.visa.nucleus.core.plugin.WorkspacePlugin;
 import com.visa.nucleus.plugins.agent.AgentPluginFactory;
 import com.visa.nucleus.plugins.runtime.RuntimePluginFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.File;

@@ -69,7 +69,7 @@ class OrchestratorServiceTest {
         orchestrator = new OrchestratorService(
                 sessionManager, projectService, trackerPlugin, workspacePlugin,
                 agentPluginFactory, runtimePluginFactory, List.of(notifierPlugin),
-                nucleusProperties, "/repo");
+                nucleusProperties);
     }
 
     @Test
@@ -251,6 +251,8 @@ class OrchestratorServiceTest {
         Project p = new Project();
         p.setName(name);
         p.setPath("/repo");
+        p.setAgentType("claude");
+        p.setRuntime("docker");
         return p;
     }
 }
