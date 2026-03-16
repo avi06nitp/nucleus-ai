@@ -14,6 +14,7 @@ import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientBuilder;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.plugin.RuntimePlugin;
+import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.List;
@@ -24,6 +25,7 @@ import java.util.List;
  * Each agent session runs in a container named nucleus-agent-{sessionId}
  * with the session's worktree bind-mounted at /workspace.
  */
+@Component
 public class DockerRuntimePlugin implements RuntimePlugin {
 
     static final String IMAGE = "node:20-slim";

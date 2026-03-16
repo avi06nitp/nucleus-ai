@@ -3,6 +3,7 @@ package com.visa.nucleus.plugins.runtime;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.plugin.RuntimePlugin;
 import com.visa.nucleus.plugins.workspace.ProcessRunner;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Each agent session runs in a tmux session named nucleus-{sessionId}
  * with the session's worktree as the working directory.
  */
+@Component
 public class TmuxRuntimePlugin implements RuntimePlugin {
 
     static final String SESSION_PREFIX = "nucleus-";
