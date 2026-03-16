@@ -3,10 +3,13 @@ package com.visa.nucleus.config;
 import com.visa.nucleus.core.plugin.NotifierPlugin;
 import com.visa.nucleus.core.plugin.TrackerPlugin;
 import com.visa.nucleus.core.plugin.WorkspacePlugin;
+import com.visa.nucleus.plugins.notifier.DesktopNotifierPlugin;
+import com.visa.nucleus.plugins.notifier.SlackNotifierPlugin;
 import com.visa.nucleus.plugins.notifier.TeamsNotifierPlugin;
 import com.visa.nucleus.plugins.tracker.JiraTrackerPlugin;
 import com.visa.nucleus.plugins.workspace.GitWorktreePlugin;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
@@ -32,8 +35,22 @@ public class PluginConfig {
     }
 
     @Bean
-    public NotifierPlugin notifierPlugin() {
-        return new TeamsNotifierPlugin();
+    public NotifierPlugin teamsNotifierPlugin(
+            @Value("${TEAMS_WEBHOOK_URL:}") String webhookUrl) {
+        return new TeamsNotifierPlugin(webhookUrl);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "nucleus.notifiers.slack.enabled", havingValue = "true")
+    public NotifierPlugin slackNotifierPlugin(
+            @Value("${SLACK_WEBHOOK_URL:}") String webhookUrl) {
+        return new SlackNotifierPlugin(webhookUrl);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "nucleus.notifiers.desktop.enabled", havingValue = "true")
+    public NotifierPlugin desktopNotifierPlugin() {
+        return new DesktopNotifierPlugin();
     }
 
     @Bean

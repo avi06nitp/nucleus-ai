@@ -25,6 +25,10 @@ public class TeamsNotifierPlugin implements NotifierPlugin {
         this(System.getenv("TEAMS_WEBHOOK_URL"), HttpClient.newHttpClient());
     }
 
+    public TeamsNotifierPlugin(String webhookUrl) {
+        this(webhookUrl, HttpClient.newHttpClient());
+    }
+
     // Package-private constructor for testing
     TeamsNotifierPlugin(String webhookUrl, HttpClient httpClient) {
         this.webhookUrl = webhookUrl;

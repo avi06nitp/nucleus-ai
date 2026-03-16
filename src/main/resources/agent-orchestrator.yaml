@@ -1,3 +1,8 @@
 nucleus:
   defaults:
-    notifiers: [slack, desktop]   # can have multiple: teams, slack, desktop
+    notifiers: [teams, slack]     # can have multiple: teams, slack, desktop
+  notifiers:
+    slack:
+      enabled: true
+    desktop:
+      enabled: false
