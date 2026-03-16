@@ -72,11 +72,22 @@ class WebhookControllerTest {
     }
 
     @Test
-    void verifySignature_skipsCheckWhenSecretNotConfigured() {
+    void validateConfig_throwsWhenSecretIsBlank() {
         WebhookController noSecretController =
                 new WebhookController(reactionEngine, sessionRepository, reactionEventRepository, objectMapper, "");
-        byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
-        assertTrue(noSecretController.verifySignature(body, ""));
+        assertThrows(IllegalStateException.class, noSecretController::validateConfig);
+    }
+
+    @Test
+    void validateConfig_throwsWhenSecretIsNull() {
+        WebhookController noSecretController =
+                new WebhookController(reactionEngine, sessionRepository, reactionEventRepository, objectMapper, null);
+        assertThrows(IllegalStateException.class, noSecretController::validateConfig);
+    }
+
+    @Test
+    void validateConfig_doesNotThrowWhenSecretIsSet() {
+        assertDoesNotThrow(() -> controller.validateConfig());
     }
 
     // -------------------------------------------------------------------------

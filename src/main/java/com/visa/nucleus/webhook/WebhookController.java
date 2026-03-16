@@ -7,6 +7,7 @@ import com.visa.nucleus.core.AgentSessionRepository;
 import com.visa.nucleus.core.ReactionEvent;
 import com.visa.nucleus.core.ReactionEventRepository;
 import com.visa.nucleus.core.service.ReactionEngine;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -64,6 +65,15 @@ public class WebhookController {
         this.reactionEventRepository = reactionEventRepository;
         this.objectMapper = objectMapper;
         this.webhookSecret = webhookSecret;
+    }
+
+    @PostConstruct
+    void validateConfig() {
+        if (webhookSecret == null || webhookSecret.isBlank()) {
+            throw new IllegalStateException(
+                "GITHUB_WEBHOOK_SECRET environment variable is not set. " +
+                "Webhook signature verification is disabled — refusing to start.");
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -262,13 +272,8 @@ public class WebhookController {
 
     /**
      * Verifies the {@code X-Hub-Signature-256} header using HMAC-SHA256.
-     * Returns {@code true} if the secret is not configured (allows unauthenticated dev usage).
      */
     boolean verifySignature(byte[] body, String signature) {
-        if (webhookSecret == null || webhookSecret.isBlank()) {
-            log.warning("GITHUB_WEBHOOK_SECRET not set; skipping signature verification");
-            return true;
-        }
         if (signature == null || signature.isBlank()) {
             return false;
         }
