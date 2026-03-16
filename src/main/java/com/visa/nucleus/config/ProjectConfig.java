@@ -12,6 +12,7 @@ public class ProjectConfig {
     private String sessionPrefix;
     private String agentType;   // "claude" or "openai"
     private String runtime;     // "docker" or "tmux"
+    private String tracker;     // "jira" | "github" | "linear"
 
     public String getRepo() {
         return repo;
@@ -67,5 +68,13 @@ public class ProjectConfig {
 
     public void setRuntime(String runtime) {
         this.runtime = runtime;
+    }
+
+    public String getTracker() {
+        return tracker;
+    }
+
+    public void setTracker(String tracker) {
+        this.tracker = tracker;
     }
 }

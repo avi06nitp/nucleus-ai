@@ -23,6 +23,7 @@ public class NucleusProperties {
 
     private int port = 3000;
     private Defaults defaults = new Defaults();
+    private TrackerConfig tracker = new TrackerConfig();
     private Map<String, ProjectConfig> projects = new HashMap<>();
     private Map<String, ReactionRule> reactions = new HashMap<>();
 
@@ -34,6 +35,7 @@ public class NucleusProperties {
         private String runtime = "docker";
         private String agent = "claude";
         private String workspace = "worktree";
+        private String tracker = "jira";
         private List<String> notifiers = new ArrayList<>(List.of("teams"));
 
         public String getRuntime() {
@@ -60,6 +62,14 @@ public class NucleusProperties {
             this.workspace = workspace;
         }
 
+        public String getTracker() {
+            return tracker;
+        }
+
+        public void setTracker(String tracker) {
+            this.tracker = tracker;
+        }
+
         public List<String> getNotifiers() {
             return notifiers;
         }
@@ -67,6 +77,62 @@ public class NucleusProperties {
         public void setNotifiers(List<String> notifiers) {
             this.notifiers = notifiers;
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Nested: TrackerConfig
+    // -------------------------------------------------------------------------
+
+    public static class TrackerConfig {
+        private JiraConfig jira = new JiraConfig();
+        private LinearConfig linear = new LinearConfig();
+        private GithubConfig github = new GithubConfig();
+
+        public static class JiraConfig {
+            private String baseUrl;
+            private String email;
+            private String apiToken;
+
+            public String getBaseUrl() { return baseUrl; }
+            public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+
+            public String getEmail() { return email; }
+            public void setEmail(String email) { this.email = email; }
+
+            public String getApiToken() { return apiToken; }
+            public void setApiToken(String apiToken) { this.apiToken = apiToken; }
+        }
+
+        public static class LinearConfig {
+            private String apiKey;
+
+            public String getApiKey() { return apiKey; }
+            public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+        }
+
+        public static class GithubConfig {
+            private String token;
+            private String owner;
+            private String repo;
+
+            public String getToken() { return token; }
+            public void setToken(String token) { this.token = token; }
+
+            public String getOwner() { return owner; }
+            public void setOwner(String owner) { this.owner = owner; }
+
+            public String getRepo() { return repo; }
+            public void setRepo(String repo) { this.repo = repo; }
+        }
+
+        public JiraConfig getJira() { return jira; }
+        public void setJira(JiraConfig jira) { this.jira = jira; }
+
+        public LinearConfig getLinear() { return linear; }
+        public void setLinear(LinearConfig linear) { this.linear = linear; }
+
+        public GithubConfig getGithub() { return github; }
+        public void setGithub(GithubConfig github) { this.github = github; }
     }
 
     // -------------------------------------------------------------------------
@@ -87,6 +153,14 @@ public class NucleusProperties {
 
     public void setDefaults(Defaults defaults) {
         this.defaults = defaults;
+    }
+
+    public TrackerConfig getTracker() {
+        return tracker;
+    }
+
+    public void setTracker(TrackerConfig tracker) {
+        this.tracker = tracker;
     }
 
     public Map<String, ProjectConfig> getProjects() {

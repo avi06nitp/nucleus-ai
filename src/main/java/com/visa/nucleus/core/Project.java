@@ -27,6 +27,8 @@ public class Project {
 
     private String runtime;        // "docker" or "tmux"
 
+    private String tracker;        // "jira" | "github" | "linear"
+
     private String sessionPrefix;  // short name for branch prefixes
 
     private LocalDateTime createdAt;

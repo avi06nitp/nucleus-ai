@@ -8,14 +8,27 @@ defaults:
   runtime: tmux            # docker | tmux
   agent: claude            # claude | openai
   workspace: worktree      # worktree | clone
+  tracker: jira            # jira | github | linear  (per-project override takes precedence)
   notifiers: [teams]       # teams | slack | desktop | webhook
+
+tracker:
+  jira:
+    baseUrl: https://company.atlassian.net
+    email: ${JIRA_EMAIL:}
+    apiToken: ${JIRA_API_TOKEN:}
+  linear:
+    apiKey: ${LINEAR_API_KEY:}
+  github:
+    token: ${GITHUB_TOKEN:}
+    owner: ${GITHUB_OWNER:}
+    repo: ${GITHUB_REPO:}
 
 projects:
   nucleus-ai:
     repo: avi06nitp/nucleus-ai
     path: /Users/avi/Desktop/nucleus-ai
     defaultBranch: main
-    jiraProjectKey: NA
+    tracker: github          # jira | github | linear
     agentType: claude
     runtime: docker
     sessionPrefix: na
@@ -25,19 +38,19 @@ projects:
   #   repo: owner/my-app
   #   path: ~/my-app
   #   defaultBranch: main
-  #   jiraProjectKey: MYAPP
+  #   tracker: github
   #   agentType: claude
   #   runtime: docker
   #   sessionPrefix: app
   #
-  # other-service:
-  #   repo: owner/other-service
-  #   path: ~/other-service
-  #   defaultBranch: develop
-  #   jiraProjectKey: SVC
-  #   agentType: openai
+  # payments-service:
+  #   repo: owner/payments-service
+  #   path: ~/payments-service
+  #   defaultBranch: main
+  #   tracker: jira
+  #   agentType: claude
   #   runtime: tmux
-  #   sessionPrefix: svc
+  #   sessionPrefix: pay
 
 reactions:
   ci-failed:
