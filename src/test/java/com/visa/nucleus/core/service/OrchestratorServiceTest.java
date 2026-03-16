@@ -1,6 +1,7 @@
 package com.visa.nucleus.core.service;
 
 import com.visa.nucleus.config.NucleusProperties;
+import com.visa.nucleus.config.ProjectConfig;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.AgentSessionRepository;
 import com.visa.nucleus.core.Project;
@@ -12,6 +13,7 @@ import com.visa.nucleus.core.plugin.TrackerPlugin;
 import com.visa.nucleus.core.plugin.WorkspacePlugin;
 import com.visa.nucleus.plugins.agent.AgentPluginFactory;
 import com.visa.nucleus.plugins.runtime.RuntimePluginFactory;
+import com.visa.nucleus.plugins.tracker.TrackerPluginFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,13 +36,14 @@ import static org.mockito.Mockito.*;
 class OrchestratorServiceTest {
 
     @Mock TrackerPlugin trackerPlugin;
+    @Mock TrackerPluginFactory trackerPluginFactory;
     @Mock WorkspacePlugin workspacePlugin;
     @Mock RuntimePlugin runtimePlugin;
     @Mock AgentPlugin agentPlugin;
-    @Mock NotifierPlugin notifierPlugin;
-    @Mock AgentSessionRepository sessionRepository;
     @Mock AgentPluginFactory agentPluginFactory;
     @Mock RuntimePluginFactory runtimePluginFactory;
+    @Mock NotifierPlugin notifierPlugin;
+    @Mock AgentSessionRepository sessionRepository;
     @Mock ProjectService projectService;
     @Mock NucleusProperties nucleusProperties;
 
@@ -58,18 +61,21 @@ class OrchestratorServiceTest {
         when(sessionRepository.findById(anyString())).thenAnswer(inv ->
                 Optional.ofNullable(store.get((String) inv.getArgument(0))));
 
-        NucleusProperties.Defaults defaults = new NucleusProperties.Defaults();
-        when(nucleusProperties.getDefaults()).thenReturn(defaults);
+        // Default: no per-project tracker config → resolveTrackerType falls back to "jira"
+        when(nucleusProperties.getProjects()).thenReturn(new HashMap<>());
+        when(nucleusProperties.getDefaults()).thenReturn(new NucleusProperties.Defaults());
         when(nucleusProperties.getReactions()).thenReturn(new HashMap<>());
 
+        // Factory stubs
+        when(trackerPluginFactory.create(anyString(), any())).thenReturn(trackerPlugin);
         when(agentPluginFactory.create(anyString())).thenReturn(agentPlugin);
         when(runtimePluginFactory.create(anyString())).thenReturn(runtimePlugin);
 
         sessionManager = new SessionManager(sessionRepository);
         orchestrator = new OrchestratorService(
-                sessionManager, projectService, trackerPlugin, workspacePlugin,
+                sessionManager, projectService, trackerPluginFactory, workspacePlugin,
                 agentPluginFactory, runtimePluginFactory, List.of(notifierPlugin),
-                nucleusProperties);
+                nucleusProperties, "/repo");
     }
 
     @Test
@@ -77,7 +83,7 @@ class OrchestratorServiceTest {
         when(projectService.getProject("my-project")).thenReturn(Optional.of(project("my-project")));
         when(trackerPlugin.getIssueContext("T-1")).thenReturn("Issue context");
         when(workspacePlugin.generateBranchName("T-1", "my-project")).thenReturn("feat/T-1-my-project");
-        when(workspacePlugin.createWorktree("/repo", "feat/T-1-my-project")).thenReturn("/tmp/worktrees/feat/T-1-my-project");
+        when(workspacePlugin.createWorktree(anyString(), eq("feat/T-1-my-project"))).thenReturn("/tmp/worktrees/feat/T-1-my-project");
 
         AgentSession session = orchestrator.spawn("my-project", "T-1");
 
@@ -106,6 +112,36 @@ class OrchestratorServiceTest {
         when(projectService.getProject("unknown")).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> orchestrator.spawn("unknown", "T-X"));
+    }
+
+    @Test
+    void spawn_uses_per_project_tracker_type() throws Exception {
+        ProjectConfig config = new ProjectConfig();
+        config.setTracker("github");
+        when(nucleusProperties.getProjects()).thenReturn(Map.of("my-project", config));
+        when(projectService.getProject("my-project")).thenReturn(Optional.of(project("my-project")));
+        when(trackerPlugin.getIssueContext("T-1")).thenReturn("Issue context");
+        when(workspacePlugin.generateBranchName(anyString(), anyString())).thenReturn("feat/T-1");
+        when(workspacePlugin.createWorktree(anyString(), anyString())).thenReturn("/tmp/wt");
+
+        orchestrator.spawn("my-project", "T-1");
+
+        verify(trackerPluginFactory).create(eq("github"), any());
+    }
+
+    @Test
+    void spawn_falls_back_to_default_tracker_type() throws Exception {
+        NucleusProperties.Defaults defaults = new NucleusProperties.Defaults();
+        defaults.setTracker("linear");
+        when(nucleusProperties.getDefaults()).thenReturn(defaults);
+        when(projectService.getProject("proj")).thenReturn(Optional.of(project("proj")));
+        when(trackerPlugin.getIssueContext(anyString())).thenReturn("ctx");
+        when(workspacePlugin.generateBranchName(anyString(), anyString())).thenReturn("feat/branch");
+        when(workspacePlugin.createWorktree(anyString(), anyString())).thenReturn("/tmp/wt");
+
+        orchestrator.spawn("proj", "T-2");
+
+        verify(trackerPluginFactory).create(eq("linear"), any());
     }
 
     @Test
@@ -213,13 +249,13 @@ class OrchestratorServiceTest {
         sessionManager.save(session);
 
         when(trackerPlugin.getIssueContext("T-10")).thenReturn("fresh context");
-        when(workspacePlugin.restoreWorktree("/repo", "feat/branch")).thenReturn("/tmp/wt/feat/branch");
+        when(workspacePlugin.restoreWorktree(anyString(), eq("feat/branch"))).thenReturn("/tmp/wt/feat/branch");
 
         AgentSession restored = orchestrator.restore(session.getSessionId());
 
         assertEquals(AgentSession.Status.RUNNING, restored.getStatus());
         assertEquals("feat/branch", restored.getBranchName());
-        verify(workspacePlugin).restoreWorktree("/repo", "feat/branch");
+        verify(workspacePlugin).restoreWorktree(anyString(), eq("feat/branch"));
         verify(runtimePlugin).start(restored);
         verify(agentPlugin).initialize(restored, "fresh context");
     }
@@ -251,6 +287,7 @@ class OrchestratorServiceTest {
         Project p = new Project();
         p.setName(name);
         p.setPath("/repo");
+        p.setDefaultBranch("main");
         p.setAgentType("claude");
         p.setRuntime("docker");
         return p;
