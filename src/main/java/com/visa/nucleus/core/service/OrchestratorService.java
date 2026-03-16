@@ -34,8 +34,8 @@ public class OrchestratorService {
     private final ProjectService projectService;
     private final TrackerPlugin trackerPlugin;
     private final WorkspacePlugin workspacePlugin;
-    private final AgentPluginFactory agentPluginFactory;
-    private final RuntimePluginFactory runtimePluginFactory;
+    private final RuntimePlugin runtimePlugin;
+    private final AgentPlugin agentPlugin;
     private final List<NotifierPlugin> notifierPlugins;
     private final NucleusProperties nucleusProperties;
 
@@ -44,16 +44,17 @@ public class OrchestratorService {
             ProjectService projectService,
             TrackerPlugin trackerPlugin,
             WorkspacePlugin workspacePlugin,
-            AgentPluginFactory agentPluginFactory,
-            RuntimePluginFactory runtimePluginFactory,
+            RuntimePlugin runtimePlugin,
+            AgentPlugin agentPlugin,
             List<NotifierPlugin> notifierPlugins,
-            NucleusProperties nucleusProperties) {
+            NucleusProperties nucleusProperties,
+            @Value("${NUCLEUS_REPO_PATH:/tmp}") String repoPath) {
         this.sessionManager = sessionManager;
         this.projectService = projectService;
         this.trackerPlugin = trackerPlugin;
         this.workspacePlugin = workspacePlugin;
-        this.agentPluginFactory = agentPluginFactory;
-        this.runtimePluginFactory = runtimePluginFactory;
+        this.runtimePlugin = runtimePlugin;
+        this.agentPlugin = agentPlugin;
         this.notifierPlugins = notifierPlugins;
         this.nucleusProperties = nucleusProperties;
     }
@@ -161,11 +162,9 @@ public class OrchestratorService {
         session.incrementCiRetryCount();
 
         if (session.getCiRetryCount() > maxCiRetries(session.getProjectName())) {
-            for (NotifierPlugin notifier : notifierPlugins) {
-                notifier.notify(sessionId,
-                        "Session " + sessionId + " has failed CI " + session.getCiRetryCount() + " times and needs attention.",
-                        NotificationLevel.NEEDS_ATTENTION);
-            }
+            notifyAll(sessionId,
+                    "Session " + sessionId + " has failed CI " + session.getCiRetryCount() + " times and needs attention.",
+                    NotificationLevel.NEEDS_ATTENTION);
         }
 
         sessionManager.save(session);
@@ -182,38 +181,9 @@ public class OrchestratorService {
         sessionManager.save(session);
     }
 
-    public AgentPlugin agentPluginForSession(String sessionId) {
-        AgentSession session = sessionManager.getSession(sessionId)
-                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
-        return agentPluginFactory.create(resolveAgentType(session));
-    }
-
-    public RuntimePlugin runtimePluginForSession(String sessionId) {
-        AgentSession session = sessionManager.getSession(sessionId)
-                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + sessionId));
-        return runtimePluginFactory.create(resolveRuntime(session));
-    }
-
-    private String resolveAgentType(AgentSession session) {
-        if (session.getAgentType() != null && !session.getAgentType().isBlank()) {
-            return session.getAgentType();
+    private void notifyAll(String sessionId, String message, NotificationLevel level) throws Exception {
+        for (NotifierPlugin notifier : notifierPlugins) {
+            notifier.notify(sessionId, message, level);
         }
-        return projectService.getProject(session.getProjectName())
-                .map(Project::getAgentType)
-                .filter(t -> t != null && !t.isBlank())
-                .orElseGet(() -> {
-                    String def = nucleusProperties.getDefaults().getAgent();
-                    return def != null ? def : DEFAULT_AGENT_TYPE;
-                });
-    }
-
-    private String resolveRuntime(AgentSession session) {
-        return projectService.getProject(session.getProjectName())
-                .map(Project::getRuntime)
-                .filter(r -> r != null && !r.isBlank())
-                .orElseGet(() -> {
-                    String def = nucleusProperties.getDefaults().getRuntime();
-                    return def != null ? def : DEFAULT_RUNTIME;
-                });
     }
 }

@@ -1,0 +1,3 @@
+nucleus:
+  defaults:
+    notifiers: [slack, desktop]   # can have multiple: teams, slack, desktop
