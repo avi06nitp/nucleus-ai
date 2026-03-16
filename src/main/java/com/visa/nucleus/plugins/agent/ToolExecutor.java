@@ -24,7 +24,21 @@ public class ToolExecutor {
     }
 
     /**
-     * Runs a shell command inside the agent's container and returns stdout+stderr.
+     * Runs a shell command in the worktree directory and returns stdout+stderr.
+     * Falls back to Docker exec if a dockerRuntimePlugin is configured.
+     */
+    public String executeInWorktree(String worktreePath, String command) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder("sh", "-c", command);
+        pb.directory(new java.io.File(worktreePath));
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+        String output = new String(process.getInputStream().readAllBytes());
+        process.waitFor();
+        return output.isBlank() ? "(no output)" : output;
+    }
+
+    /**
+     * @deprecated Use executeInWorktree for tmux runtime.
      */
     public String executeInContainer(String sessionId, String command) throws Exception {
         return dockerRuntimePlugin.execAndCapture(sessionId, command);

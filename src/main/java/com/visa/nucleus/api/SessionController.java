@@ -115,8 +115,12 @@ public class SessionController {
         if (sessionManager.getSession(id).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        String logs = orchestratorService.runtimePluginForSession(id).getLogs(id);
-        return ResponseEntity.ok(logs);
+        String agentLogs = orchestratorService.agentPluginForSession(id).getLogs(id);
+        String runtimeLogs = orchestratorService.runtimePluginForSession(id).getLogs(id);
+        String combined = agentLogs.isBlank() ? runtimeLogs
+                : runtimeLogs.isBlank() ? agentLogs
+                : agentLogs + "\n\n--- Runtime Output ---\n" + runtimeLogs;
+        return ResponseEntity.ok(combined);
     }
 
     // -------------------------------------------------------------------------

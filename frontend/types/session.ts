@@ -15,7 +15,7 @@ export interface Project {
 export type AgentType = 'claude' | 'openai';
 
 export interface Session {
-  id: string;
+  sessionId: string;
   ticketId: string;
   projectName: string;
   branchName: string;

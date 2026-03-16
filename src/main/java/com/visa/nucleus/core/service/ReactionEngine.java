@@ -8,6 +8,7 @@ import com.visa.nucleus.core.plugin.NotifierPlugin;
 import com.visa.nucleus.core.plugin.ScmPlugin;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.logging.Logger;
 
 /**
@@ -37,19 +38,19 @@ public class ReactionEngine {
     private static final int DEFAULT_CI_RETRIES = 3;
 
     private final OrchestratorService orchestratorService;
-    private final NotifierPlugin notifierPlugin;
+    private final List<NotifierPlugin> notifierPlugins;
     private final ScmPlugin scmPlugin;
     private final SessionManager sessionManager;
     private final NucleusProperties nucleusProperties;
 
     public ReactionEngine(
             OrchestratorService orchestratorService,
-            NotifierPlugin notifierPlugin,
+            List<NotifierPlugin> notifierPlugins,
             ScmPlugin scmPlugin,
             SessionManager sessionManager,
             NucleusProperties nucleusProperties) {
         this.orchestratorService = orchestratorService;
-        this.notifierPlugin = notifierPlugin;
+        this.notifierPlugins = notifierPlugins;
         this.scmPlugin = scmPlugin;
         this.sessionManager = sessionManager;
         this.nucleusProperties = nucleusProperties;
@@ -76,8 +77,7 @@ public class ReactionEngine {
 
         if (rule != null && !rule.isAuto()) {
             log.info("ci-failed reaction auto=false; notifying without forwarding to agent. session=" + sessionId);
-            notifierPlugin.notify(sessionId,
-                    "CI failed for session " + sessionId + ". Manual review required.",
+            notifyAll(sessionId, "CI failed for session " + sessionId + ". Manual review required.",
                     NotificationLevel.NEEDS_ATTENTION);
             return;
         }
@@ -92,10 +92,8 @@ public class ReactionEngine {
         if (session.getCiRetryCount() > retryLimit) {
             log.warning("CI retry limit exceeded for session=" + sessionId
                     + " (count=" + session.getCiRetryCount() + ", limit=" + retryLimit + ")");
-            notifierPlugin.notify(sessionId,
-                    "Session " + sessionId + " has exceeded the CI retry limit ("
-                            + retryLimit + " retries). Needs attention.",
-                    NotificationLevel.NEEDS_ATTENTION);
+            notifyAll(sessionId, "Session " + sessionId + " has exceeded the CI retry limit ("
+                    + retryLimit + " retries). Needs attention.", NotificationLevel.NEEDS_ATTENTION);
         }
     }
 
@@ -112,8 +110,7 @@ public class ReactionEngine {
 
         if (rule != null && !rule.isAuto()) {
             log.info("changes-requested reaction auto=false; notifying without forwarding. session=" + sessionId);
-            notifierPlugin.notify(sessionId,
-                    "Review comment received for session " + sessionId + ": " + comment,
+            notifyAll(sessionId, "Review comment received for session " + sessionId + ": " + comment,
                     NotificationLevel.NEEDS_ATTENTION);
             return;
         }
@@ -140,9 +137,14 @@ public class ReactionEngine {
             sessionManager.save(session);
         } else {
             log.info("approved-and-green auto=false; sending READY_TO_MERGE notification for session=" + sessionId);
-            notifierPlugin.notify(sessionId,
-                    "PR is approved and CI is green for session " + sessionId + ". Ready to merge: " + prUrl,
-                    NotificationLevel.READY_TO_MERGE);
+            notifyAll(sessionId, "PR is approved and CI is green for session " + sessionId
+                    + ". Ready to merge: " + prUrl, NotificationLevel.READY_TO_MERGE);
+        }
+    }
+
+    private void notifyAll(String sessionId, String message, NotificationLevel level) throws Exception {
+        for (NotifierPlugin notifier : notifierPlugins) {
+            notifier.notify(sessionId, message, level);
         }
     }
 }

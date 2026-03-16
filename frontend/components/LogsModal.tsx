@@ -15,7 +15,7 @@ export default function LogsModal({ session, onClose }: Props) {
 
   const fetchLogs = async () => {
     try {
-      const res = await fetch(`/api/sessions/${session.id}/logs`);
+      const res = await fetch(`/api/sessions/${session.sessionId}/logs`);
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const text = await res.text();
       setLogs(text || '(no logs yet)');
@@ -28,7 +28,7 @@ export default function LogsModal({ session, onClose }: Props) {
     fetchLogs();
     const interval = setInterval(fetchLogs, 5000);
     return () => clearInterval(interval);
-  }, [session.id]);
+  }, [session.sessionId]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });

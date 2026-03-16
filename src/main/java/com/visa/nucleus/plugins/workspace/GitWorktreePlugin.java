@@ -28,11 +28,42 @@ public class GitWorktreePlugin implements WorkspacePlugin {
         }
 
         String worktreePath = WORKTREE_BASE + branchName;
-        processRunner.run(
-            List.of("git", "worktree", "add", "-b", branchName, worktreePath, "HEAD"),
-            repoPath
-        );
+
+        // If the worktree directory already exists, remove it first
+        File worktreeDir = new File(worktreePath);
+        if (worktreeDir.exists()) {
+            processRunner.run(
+                List.of("git", "worktree", "remove", worktreePath, "--force"),
+                repoPath
+            );
+        }
+
+        // Check if branch already exists — if so, reuse it; otherwise create it
+        boolean branchExists = isBranchExists(repoPath, branchName);
+        if (branchExists) {
+            processRunner.run(
+                List.of("git", "worktree", "add", worktreePath, branchName),
+                repoPath
+            );
+        } else {
+            processRunner.run(
+                List.of("git", "worktree", "add", "-b", branchName, worktreePath, "HEAD"),
+                repoPath
+            );
+        }
         return worktreePath;
+    }
+
+    private boolean isBranchExists(String repoPath, String branchName) {
+        try {
+            processRunner.run(
+                List.of("git", "rev-parse", "--verify", branchName),
+                repoPath
+            );
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override

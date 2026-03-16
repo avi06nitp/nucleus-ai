@@ -6,4 +6,5 @@ public interface AgentPlugin {
     void initialize(AgentSession session, String issueContext) throws Exception;
     void sendMessage(String sessionId, String message) throws Exception;
     String getAgentType();
+    default String getLogs(String sessionId) { return ""; }
 }

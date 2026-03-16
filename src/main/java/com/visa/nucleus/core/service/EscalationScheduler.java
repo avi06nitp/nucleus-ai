@@ -31,15 +31,15 @@ public class EscalationScheduler {
     private static final Pattern DURATION_PATTERN = Pattern.compile("(\\d+)(m|h|d)");
 
     private final AgentSessionRepository sessionRepository;
-    private final NotifierPlugin notifierPlugin;
+    private final List<NotifierPlugin> notifierPlugins;
     private final NucleusProperties nucleusProperties;
 
     public EscalationScheduler(
             AgentSessionRepository sessionRepository,
-            NotifierPlugin notifierPlugin,
+            List<NotifierPlugin> notifierPlugins,
             NucleusProperties nucleusProperties) {
         this.sessionRepository = sessionRepository;
-        this.notifierPlugin = notifierPlugin;
+        this.notifierPlugins = notifierPlugins;
         this.nucleusProperties = nucleusProperties;
     }
 
@@ -66,11 +66,13 @@ public class EscalationScheduler {
                 log.warning("Session " + session.getSessionId()
                         + " has been RUNNING without update for >" + rule.getEscalateAfter()
                         + " — escalating.");
-                notifierPlugin.notify(
-                        session.getSessionId(),
-                        "Session " + session.getSessionId()
-                                + " has not responded in " + rule.getEscalateAfter() + ". Needs attention.",
-                        NotificationLevel.NEEDS_ATTENTION);
+                for (NotifierPlugin notifierPlugin : notifierPlugins) {
+                    notifierPlugin.notify(
+                            session.getSessionId(),
+                            "Session " + session.getSessionId()
+                                    + " has not responded in " + rule.getEscalateAfter() + ". Needs attention.",
+                            NotificationLevel.NEEDS_ATTENTION);
+                }
             } catch (Exception e) {
                 log.warning("Failed to escalate session " + session.getSessionId() + ": " + e.getMessage());
             }

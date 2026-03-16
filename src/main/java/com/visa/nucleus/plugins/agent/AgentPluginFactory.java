@@ -1,6 +1,7 @@
 package com.visa.nucleus.plugins.agent;
 
 import com.visa.nucleus.core.plugin.AgentPlugin;
+import com.visa.nucleus.plugins.runtime.DockerRuntimePlugin;
 import org.springframework.stereotype.Component;
 
 /**
@@ -12,8 +13,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class AgentPluginFactory {
 
-    private final ClaudeAgentPlugin claudePlugin = new ClaudeAgentPlugin();
-    private final OpenAIAgentPlugin openAiPlugin = new OpenAIAgentPlugin();
+    private final ToolExecutor toolExecutor;
+    private final ClaudeAgentPlugin claudePlugin;
+    private final OpenAIAgentPlugin openAiPlugin;
+
+    public AgentPluginFactory(DockerRuntimePlugin dockerRuntimePlugin) {
+        this.toolExecutor = new ToolExecutor(dockerRuntimePlugin);
+        this.claudePlugin = new ClaudeAgentPlugin();
+        this.openAiPlugin = new OpenAIAgentPlugin(toolExecutor);
+    }
 
     /**
      * Returns an AgentPlugin for the given agent type.

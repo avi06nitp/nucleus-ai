@@ -90,7 +90,7 @@ public class TrackerPluginFactory {
      * @throws IllegalArgumentException if both {@code value} and the env var are blank
      */
     private String coalesce(String value, String envVar) {
-        if (value != null && !value.isBlank()) {
+        if (value != null && !value.isBlank() && !value.startsWith("${")) {
             return value;
         }
         String env = System.getenv(envVar);

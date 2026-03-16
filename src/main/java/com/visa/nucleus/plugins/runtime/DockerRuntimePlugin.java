@@ -11,7 +11,8 @@ import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.PullResponseItem;
 import com.github.dockerjava.api.model.Volume;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
-import com.github.dockerjava.core.DockerClientBuilder;
+import com.github.dockerjava.core.DockerClientImpl;
+import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import com.visa.nucleus.core.AgentSession;
 import com.visa.nucleus.core.plugin.RuntimePlugin;
 import org.springframework.stereotype.Component;
@@ -42,11 +43,31 @@ public class DockerRuntimePlugin implements RuntimePlugin {
 
     /** Default constructor — connects to the local Docker daemon via Unix socket. */
     public DockerRuntimePlugin() {
-        this(DockerClientBuilder.getInstance(
+        this(buildDockerClient());
+    }
+
+    private static DockerClient buildDockerClient() {
+        String socketPath = resolveDockerSocket();
+        return DockerClientImpl.getInstance(
                 DefaultDockerClientConfig.createDefaultConfigBuilder()
-                        .withDockerHost("unix:///var/run/docker.sock")
-                        .build())
-                .build());
+                        .withDockerHost("unix://" + socketPath)
+                        .build(),
+                new ApacheDockerHttpClient.Builder()
+                        .dockerHost(java.net.URI.create("unix://" + socketPath))
+                        .build());
+    }
+
+    private static String resolveDockerSocket() {
+        String[] candidates = {
+            System.getProperty("user.home") + "/.docker/run/docker.sock",
+            "/var/run/docker.sock",
+        };
+        for (String path : candidates) {
+            if (new java.io.File(path).exists()) {
+                return path;
+            }
+        }
+        return "/var/run/docker.sock"; // fallback
     }
 
     /**
